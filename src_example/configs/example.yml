@@ -22,13 +22,13 @@ dataset:
     name: ExampleDataset
     params:
       # size: 10000
-      data_path: data/example-10k.json
+      data_path: src_example/data/example-10k.json
     
   eval:
     name: ExampleDataset
     params:
       # size: 100
-      data_path: data/example-100.json
+      data_path: src_example/data/example-100.json
     
 
 train:
