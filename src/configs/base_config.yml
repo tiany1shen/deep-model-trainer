@@ -1,0 +1,60 @@
+#* fill experiment info
+experiment_name: 
+trial_index: 
+
+use_cpu: false
+mixed_precision: null
+gradient_accumulation_steps: 1
+split_batches: true
+log_metrics: true
+
+#* model config
+model:
+  name: # model class name
+  params:
+
+  checkpoint_path: null
+
+#* dataset config
+dataset:
+  train:
+    name: # dataset class name
+    params:
+    
+  eval:
+    name: # dataset class name
+    params:
+
+#* training config
+train:
+  num_epochs: 10
+  batch_size: 400
+  optimizer: Adam
+  learning_rate: 0.01
+  use_ema: false
+  need_other_modes:
+    - eval
+  need_datasets:
+    - train
+    - eval
+  
+  log_interval: 1 # step
+  eval_interval: 1 # epoch
+  save_interval: 1 # epoch
+
+#* evaluating config
+eval:
+  batch_size: 100
+  # need_other_modes:
+  #   - null
+  need_datasets:
+    - eval
+
+#* sampling config
+sample:
+  size: 100
+
+#* other flexible config
+# ema:
+#   decay: 0.9999
+#   checkpoint_path: null
