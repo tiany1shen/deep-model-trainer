@@ -51,3 +51,4 @@ class ClassificationTrainer(Trainer):
             label = predicts.clone().cpu().tolist()
             ax.scatter(x, y, c=[cmap[l] for l in label], marker=".")
             plt.savefig(f"{self.sample_dir}/sample.png")
+            self.accelerator.print(f"Sample picture saved at {self.sample_dir}/sample.png")
