@@ -1,6 +1,7 @@
 #* fill experiment info
 experiment_name: 
 trial_index: 
+trainer_name: Trainer
 
 use_cpu: false
 mixed_precision: null
@@ -13,7 +14,7 @@ model:
   name: # model class name
   params:
 
-  checkpoint_path: null
+  checkpoint_path: 
 
 #* dataset config
 dataset:
@@ -36,7 +37,6 @@ train:
     - eval
   need_datasets:
     - train
-    - eval
   
   log_interval: 1 # step
   eval_interval: 1 # epoch

@@ -1,5 +1,7 @@
 experiment_name: MLP-ExampleDataset
 trial_index: 1
+trainer_name: ClassificationTrainer
+
 use_cpu: false
 mixed_precision: null
 gradient_accumulation_steps: 1
