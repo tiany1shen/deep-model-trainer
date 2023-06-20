@@ -1,4 +1,5 @@
 import torch 
+import matplotlib.pyplot as plt
 from easydict import EasyDict
 from trainers import Trainer
 
@@ -33,3 +34,20 @@ class ClassificationTrainer(Trainer):
     def _eval_epoch(self, epoch):
         accuracy = self.eval()
         self.accelerator.log({'accuracy': accuracy}, step=epoch)
+
+    @torch.no_grad()
+    def sample(self):
+        self.model.eval()
+        sample_points = torch.rand(self.config.sample.size, 2).to(self.accelerator.device)
+        
+        predicts = self.unwrap_model.predict(sample_points)
+        
+        if self.accelerator.is_main_process:
+            cmap = {0: "r", 1: "g", 2: "b"}
+            fig, ax = plt.subplots()
+            data = sample_points.cpu()
+            x = data[:, 0].clone()
+            y = data[:, 1].clone()
+            label = predicts.clone().cpu().tolist()
+            ax.scatter(x, y, c=[cmap[l] for l in label], marker=".")
+            plt.savefig(f"{self.sample_dir}/sample.png")

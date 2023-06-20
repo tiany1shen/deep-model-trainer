@@ -57,7 +57,7 @@ eval:
     - eval
 
 sample:
-  size: 64
+  size: 200
 
 
 ema:
