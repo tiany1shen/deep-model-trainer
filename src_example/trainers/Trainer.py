@@ -87,9 +87,13 @@ class Trainer:
           weight_dict: dict of weights for each loss
         
         Example:
-            >>> outputs = self.model(inputs)
-            >>> loss = self.unwrap_model.compute_loss(outputs, targets)
-            >>> return loss
+        >>> outputs = self.model(inputs)
+        >>> loss = self.unwrap_model.compute_loss(outputs, targets)
+        >>> return {"loss": loss}
+        
+        Note that all keys in loss_dict should be ended with 'loss', e.g. 'total_loss', 'cls_loss', 'reg_loss', otherwise they will 
+        not be captured when calculating total loss.
+            
         """
         raise NotImplementedError
     
@@ -102,8 +106,8 @@ class Trainer:
     
     def _log_loss(self, step):
         loss_names = [name for name in self.tracker.metrics.keys() if name.endswith('loss')]
-        
         losses = self.tracker.fetch(loss_names, reductions='mean')
+        
         self.tracker.register(loss_names)
         self.accelerator.log(losses, step=step)
             

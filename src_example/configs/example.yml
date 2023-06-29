@@ -23,13 +23,13 @@ dataset:
     name: ExampleDataset
     params:
       # size: 10000
-      data_path: src_alter/data/example-10k.json
+      data_path: src_example/data/example-10k.json
     
   eval:
     name: ExampleDataset
     params:
       # size: 100
-      data_path: src_alter/data/example-100.json
+      data_path: src_example/data/example-100.json
     
 
 train:
@@ -45,8 +45,8 @@ train:
     - eval
   
   log_interval: 1 # step
-  eval_interval: 1 # epoch
-  save_interval: 1 # epoch
+  eval_interval: 2 # epoch
+  save_interval: 10 # epoch
 
 eval:
   batch_size: 100

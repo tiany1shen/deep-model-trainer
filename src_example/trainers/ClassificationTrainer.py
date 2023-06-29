@@ -11,11 +11,11 @@ class ClassificationTrainer(Trainer):
     def _compute_loss(self, inputs, targets):
         outputs = self.model(inputs)
         loss = self.unwrap_model.compute_loss(outputs, targets)
-        return {"loss": loss}, {"loss": 1.0}
+        return {"a_loss": loss, "b_loss": loss}, {"a_loss": 0.5, "b_loss": 0.5}
     
     def _register_custom_metrics(self):
         self.tracker.register(
-            ["accuracy"]
+            ["a_loss", "b_loss", "accuracy"]
         )
     
     def _log_metrics(self, epoch):
