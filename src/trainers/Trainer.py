@@ -35,6 +35,7 @@ class Trainer:
         self.accelerator.init_trackers(run, dict(self.config))
         self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
         self.tracker.register('total_loss')
+        self._register_custom_metrics()
         
         total_step = (self.start_epoch - 1) * int(len(self.train_dataloader) // self.config.gradient_accumulation_steps)
         start_step = total_step
@@ -45,14 +46,13 @@ class Trainer:
                     inputs, targets = batch
                     loss_dict, weight_dict = self._compute_loss(inputs, targets)
                     
-                    if total_step == start_step:
-                        self.tracker.register(loss_dict.keys())
-                    self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
+                    if len(loss_dict) > 1:
+                        self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
                     
                     total_loss = sum(loss_dict[name] * weight_dict[name] for name in loss_dict.keys())
                     self.tracker.update({'total_loss': total_loss.detach().float()})
                     
-                    self.accelerator.backward()
+                    self.accelerator.backward(total_loss)
                     self.optimizer.step()
                     # self.scheduler.step()
                     self.optimizer.zero_grad()
@@ -93,15 +93,19 @@ class Trainer:
         """
         raise NotImplementedError
     
+    
+    def _register_custom_metrics(self):
+        raise NotImplementedError
+    
+    def _log_metrics(self, epoch):
+        raise NotImplementedError
+    
     def _log_loss(self, step):
         loss_names = [name for name in self.tracker.metrics.keys() if name.endswith('loss')]
         
-        losses = self.tracker.get(loss_names, reduction='mean')
+        losses = self.tracker.fetch(loss_names, reductions='mean')
         self.tracker.register(loss_names)
         self.accelerator.log(losses, step=step)
-        
-    def _log_metrics(self, epoch):
-        raise NotImplementedError
             
     @torch.no_grad()
     def eval(self):

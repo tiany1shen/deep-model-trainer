@@ -1,9 +1,9 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-import models
-import datasets
-from utils import OPTIMIZER, EMA, Storage
+import models as Models
+import datasets as Datasets
+from utils import Optimizer, MetricTracker, SyncMetricTracker
 
 import torch
 from torch.utils.data import DataLoader
@@ -33,19 +33,26 @@ class Trainer:
         # init tracker
         run = f"trial-{self.config.trial_index}"
         self.accelerator.init_trackers(run, dict(self.config))
-        self.metrics = Storage()
-        self.metrics.register('loss')
+        self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
+        self.tracker.register('total_loss')
+        self._register_custom_metrics()
         
         total_step = (self.start_epoch - 1) * int(len(self.train_dataloader) // self.config.gradient_accumulation_steps)
+        start_step = total_step
         # Training Loop
         for epoch in range(self.start_epoch, self.start_epoch + train_config.num_epochs):
             for batch_idx, batch in enumerate(self.train_dataloader):
                 with self.accelerator.accumulate(self.model):
                     inputs, targets = batch
-                    loss = self._compute_loss(inputs, targets)
-                    self.metrics.update('loss', loss.detach().float())
+                    loss_dict, weight_dict = self._compute_loss(inputs, targets)
                     
-                    self.accelerator.backward(loss)
+                    if len(loss_dict) > 1:
+                        self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
+                    
+                    total_loss = sum(loss_dict[name] * weight_dict[name] for name in loss_dict.keys())
+                    self.tracker.update({'total_loss': total_loss.detach().float()})
+                    
+                    self.accelerator.backward(total_loss)
                     self.optimizer.step()
                     # self.scheduler.step()
                     self.optimizer.zero_grad()
@@ -55,14 +62,12 @@ class Trainer:
                     # if self.ema is not None:
                     #     self.ema.update(self.model)
                     if total_step % train_config.log_interval == 0:
-                        avg_loss = self.metrics.get('loss', reduction='mean')
-                        self.metrics.reset('loss')
-                        # self.accelerator.print(f"Epoch {epoch}, Total step {total_step}, Loss {avg_loss:.4f}")
-                        self.accelerator.log({'loss': avg_loss}, step=total_step)
+                        self._log_loss(total_step)
             
             if 'eval' in train_config.need_other_modes:
                 if epoch % train_config.eval_interval == 0:
                     self._eval_epoch(epoch)
+                    self._log_metrics(epoch)
             
             if 'sample' in train_config.need_other_modes:
                 if epoch % train_config.sample_interval == 0:
@@ -77,12 +82,30 @@ class Trainer:
         
         DDP model wrapped by Accelerator will not inherit costumized methods. Use `self.unwrap_model` to access these methods.
         
+        Returns:
+          loss_dict: dict of losses
+          weight_dict: dict of weights for each loss
+        
         Example:
             >>> outputs = self.model(inputs)
             >>> loss = self.unwrap_model.compute_loss(outputs, targets)
             >>> return loss
         """
         raise NotImplementedError
+    
+    
+    def _register_custom_metrics(self):
+        raise NotImplementedError
+    
+    def _log_metrics(self, epoch):
+        raise NotImplementedError
+    
+    def _log_loss(self, step):
+        loss_names = [name for name in self.tracker.metrics.keys() if name.endswith('loss')]
+        
+        losses = self.tracker.fetch(loss_names, reductions='mean')
+        self.tracker.register(loss_names)
+        self.accelerator.log(losses, step=step)
             
     @torch.no_grad()
     def eval(self):
@@ -117,7 +140,6 @@ class Trainer:
         
     def _ddp_setting(self):
         cpu = self.config.use_cpu
-        mixed_precision = self.config.mixed_precision
         gradient_accumulation_steps = self.config.gradient_accumulation_steps
         if self.config.log_metrics:
             log_with = 'all'
@@ -128,7 +150,6 @@ class Trainer:
         ddp_kwargs = DDPKwargs(broadcast_buffers=False, find_unused_parameters=False)
         self.accelerator = Accelerator(
             cpu=cpu, 
-            mixed_precision=mixed_precision, 
             gradient_accumulation_steps=gradient_accumulation_steps,
             split_batches=True,
             log_with=log_with, 
@@ -141,7 +162,7 @@ class Trainer:
     def _build_models(self):
         model_name = self.config.model.name
         model_hyperparameters = self.config.model.params
-        model_class = getattr(models, model_name)
+        model_class = getattr(Models, model_name)
         self._init_ddp_model(model_class(model_hyperparameters))
         self.accelerator.print("Model prepared successfully")
         
@@ -173,7 +194,7 @@ class Trainer:
     def _build_dataloaders(self):
         if hasattr(self.config.dataset, 'train'):
             train_dataset_name = self.config.dataset.train.name
-            train_dataset_class = getattr(datasets, train_dataset_name)
+            train_dataset_class = getattr(Datasets, train_dataset_name)
             train_dataset = train_dataset_class(self.config.dataset.train.params)
             
             train_batchsize = int(self.config.train.batch_size // self.config.gradient_accumulation_steps)
@@ -185,7 +206,7 @@ class Trainer:
             self.train_dataloader = None 
         if hasattr(self.config.dataset, 'eval'):
             eval_dataset_name = self.config.dataset.eval.name
-            eval_dataset_class = getattr(datasets, eval_dataset_name)
+            eval_dataset_class = getattr(Datasets, eval_dataset_name)
             eval_dataset = eval_dataset_class(self.config.dataset.eval.params)
             
             eval_batchsize = int(self.config.eval.batch_size // self.config.gradient_accumulation_steps)
@@ -199,7 +220,7 @@ class Trainer:
     def _build_optimizer(self):
         if self.config.mode == 'train':
             self.optimizer = self.accelerator.prepare(
-                OPTIMIZER[self.config.train.optimizer](
+                getattr(Optimizer, self.config.train.optimizer)(
                     params=self.model.parameters(), lr=self.config.train.learning_rate
                 )
             )

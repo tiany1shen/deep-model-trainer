@@ -133,3 +133,7 @@ def get_config() -> EasyDict:
     assert 'experiment_name' in config and config['experiment_name'] is not None, 'experiment_name is empty'
     assert 'trial_index' in config and config['trial_index'] is not None, 'trial_index is empty'
     return EasyDict(config)
+
+from pprint import pprint
+
+pprint(get_config())

@@ -1,6 +1,6 @@
 
 import trainers
-from utils import get_config
+from utils.options import get_config
 
 def init_trainer(config):
     return getattr(trainers, config.trainer_name)(config)

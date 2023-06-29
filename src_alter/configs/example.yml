@@ -3,7 +3,6 @@ trial_index: 1
 trainer_name: ClassificationTrainer
 
 use_cpu: false
-mixed_precision: null
 gradient_accumulation_steps: 1
 split_batches: true
 log_metrics: true
@@ -16,7 +15,7 @@ model:
       - 16
       - 32
     output_dim: 3
-  checkpoint_path: experiments/MLP-ExampleDataset/trial-1/checkpoints/epoch-20.pth
+  checkpoint_path: #experiments/MLP-ExampleDataset/trial-1/checkpoints/epoch-20.pth
 
 
 dataset:
@@ -24,13 +23,13 @@ dataset:
     name: ExampleDataset
     params:
       # size: 10000
-      data_path: src_example/data/example-10k.json
+      data_path: src_alter/data/example-10k.json
     
   eval:
     name: ExampleDataset
     params:
       # size: 100
-      data_path: src_example/data/example-100.json
+      data_path: src_alter/data/example-100.json
     
 
 train:
