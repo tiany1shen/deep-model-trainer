@@ -1,4 +1,3 @@
-from .optimizer import OPTIMIZER
+from .optimizer import Optimizer
 from .ema import EMA
-from .storage import Storage
-from .options import get_config
+from .storage import MetricTracker, SyncMetricTracker

@@ -4,7 +4,6 @@ trial_index:
 trainer_name: Trainer
 
 use_cpu: false
-mixed_precision: null
 gradient_accumulation_steps: 1
 split_batches: true
 log_metrics: true

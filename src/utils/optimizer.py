@@ -1,7 +1,7 @@
-from torch.optim import Adam, AdamW, SGD
+from torch import optim
 
-OPTIMIZER = {
-    'Adam': Adam,
-    'AdamW': AdamW,
-    'SGD': SGD
-}
+
+class Optimizer:
+    Adam = optim.Adam
+    AdamW = optim.AdamW
+    SGD = optim.SGD
