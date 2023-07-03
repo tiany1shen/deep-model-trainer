@@ -1,0 +1,70 @@
+#* fill experiment info
+experiment_name: MNIST-Classification
+trial_index: 1
+trainer_name: ClassifyTrainer
+
+use_cpu: false
+gradient_accumulation_steps: 1
+split_batches: true
+log_metrics: true
+
+#* model config
+model:
+  name: ResnetModel
+  params:
+    input_dim: 1
+    output_dim: 10
+    hidden_dims: 
+      - 32
+      - 64
+      - 128
+
+  checkpoint_path: "_"
+
+#* dataset config
+dataset:
+  train:
+    name: MNIST
+    params:
+      root: "data"
+      train: true
+
+    
+  eval:
+    name: MNIST
+    params:
+      root: "data"
+      train: false
+
+#* training config
+train:
+  num_epochs: 10
+  batch_size: 256
+  optimizer: SGD
+  learning_rate: 0.01
+  use_ema: false
+  need_other_modes:
+    - eval
+  need_datasets:
+    - train
+  
+  log_interval: 1 # step
+  eval_interval: 1 # epoch
+  save_interval: 1 # epoch
+
+#* evaluating config
+eval:
+  batch_size: 256
+  # need_other_modes:
+  #   - null
+  need_datasets:
+    - eval
+
+#* sampling config
+sample:
+  size: 100
+
+#* other flexible config
+# ema:
+#   decay: 0.9999
+#   checkpoint_path: null
