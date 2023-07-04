@@ -1,3 +1,5 @@
+import torch
+
 from .quantizer import VectorQuantizer_EMA_Reset
 from .encoder import Encoder, Decoder
 from easydict import EasyDict
@@ -46,10 +48,19 @@ class VQVAE(nn.Module):
         b, c, h, w = emb.shape
         
         flat_emb = rearrange(emb, 'b c h w -> (b h w) c')
-        quant_emb, x, commit_loss, ppl = self.quantizer(flat_emb)
+        quant_emb, onehot_code, commit_loss, ppl = self.quantizer(flat_emb)
         
         quant_emb = rearrange(quant_emb, '(b h w) c -> b c h w', b=b, h=h, w=w)
         recon_x = self.decoder(quant_emb)
         return recon_x, commit_loss, ppl
+    
+    @torch.no_grad()
+    def encode(self, x: Tensor):
+        emb = self.encoder(x)
+        b, c, h, w = emb.shape
+        
+        flat_emb = rearrange(emb, 'b c h w -> (b h w) c')
+        onehot_code = self.quantizer.quantize(flat_emb)
+        return rearrange(onehot_code, '(b h w) d -> b d h w', b=b, h=h, w=w)
 
         
