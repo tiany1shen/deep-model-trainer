@@ -137,6 +137,7 @@ class MetricTracker:
         reductions = to_list(reductions)
         if len(reductions) == 1:
             different_reduction = False
+            reductions *= len(names)
             reduce_values = Reduction.get(reductions[0])
         else:
             different_reduction = True

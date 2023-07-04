@@ -1,7 +1,7 @@
 #* fill experiment info
 experiment_name: MNIST-Generate
 trial_index: 1
-trainer_name: Trainer
+trainer_name: VqVaeTrainer
 
 use_cpu: false
 gradient_accumulation_steps: 1
@@ -10,27 +10,51 @@ log_metrics: true
 
 #* model config
 model:
-  name: # model class name
+  name: VQVAE
   params:
+    encoder:
+      input_dim: 1
+      hidden_dims:
+        - 16
+        - 64
+        - 128
+      padding: 2
+    decoder:
+      output_dim: 1
+      hidden_dims:
+        - 128
+        - 64
+        - 16
+      cropping: 28
+    quantizer:
+      codebook_dim: 128
+      codebook_num: 32
+      decay: 0.99
+      reset_threshold: 0.01
+      epsilon: 0.00001
 
   checkpoint_path: 
 
 #* dataset config
 dataset:
   train:
-    name: # dataset class name
+    name: MNIST
     params:
+      root: "data"
+      train: true
     
   eval:
-    name: # dataset class name
+    name: MNIST
     params:
+      root: "data"
+      train: false
 
 #* training config
 train:
-  num_epochs: 10
-  batch_size: 400
+  num_epochs: 1
+  batch_size: 256
   optimizer: Adam
-  learning_rate: 0.01
+  learning_rate: 0.001
   use_ema: false
   need_other_modes:
     - eval
@@ -43,7 +67,7 @@ train:
 
 #* evaluating config
 eval:
-  batch_size: 100
+  batch_size: 10
   # need_other_modes:
   #   - null
   need_datasets:
@@ -51,7 +75,7 @@ eval:
 
 #* sampling config
 sample:
-  size: 100
+  size: 10
 
 #* other flexible config
 # ema:

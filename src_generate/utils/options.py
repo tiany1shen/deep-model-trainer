@@ -9,12 +9,16 @@ def parse_args():
     parser.add_argument('--config', default='base_config', help='path to config file')
     parser.add_argument('--new_config', default='', help='path to new config file, used to update `lr`, `batch_size`, etc.')
     # exclusive arguments
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--train', action='store_true')
-    group.add_argument('--eval', action='store_true')
-    group.add_argument('--sample', action='store_true')
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument('--train', action='store_true')
+    mode_group.add_argument('--eval', action='store_true')
+    mode_group.add_argument('--sample', action='store_true')
     # print arguments
     parser.add_argument('--print', action='store_true')
+    # debug
+    debug_gp = parser.add_mutually_exclusive_group()
+    debug_gp.add_argument('--debug_epoch', action='store_true')
+    debug_gp.add_argument('--debug_step',action='store_true')
 
     return parser.parse_args()
 
@@ -140,6 +144,8 @@ def get_config() -> EasyDict:
         pprint(config)
         exit()
         
+    config['debug_epoch'] = args.debug_epoch
+    config['debug_step'] = args.debug_step
     return EasyDict(config)
 
 def edict2dict(edict: EasyDict):

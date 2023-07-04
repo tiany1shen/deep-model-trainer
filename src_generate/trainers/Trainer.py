@@ -32,8 +32,9 @@ class Trainer:
         #     self.ema = None 
         
         # init tracker
-        run = f"trial-{self.config.trial_index}"
-        self.accelerator.init_trackers(run)
+        if not (self.config.debug_epoch or self.config.debug_step):
+            run = f"trial-{self.config.trial_index}"
+            self.accelerator.init_trackers(run)
         save_config(self.config, self.trial_dir / 'config.yaml')
         self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
         self.tracker.register('total_loss')
@@ -67,6 +68,10 @@ class Trainer:
                     #     self.ema.update(self.model)
                     if total_step % train_config.log_interval == 0:
                         self._log_loss(total_step)
+
+                    if self.config.debug_step:
+                        self.accelerator.print('Debug mode, only run 1 step.')
+                        return
             
             if 'eval' in train_config.need_other_modes:
                 if epoch % train_config.eval_interval == 0:
@@ -79,6 +84,10 @@ class Trainer:
                 
             if epoch % train_config.save_interval == 0:
                 self._save_checkpoint(epoch)
+
+            if self.config.debug_epoch:
+                self.accelerator.print('Debug mode, only run 1 epoch.')
+                return
     
     def _compute_loss(self, inputs, targets):
         """
@@ -99,14 +108,21 @@ class Trainer:
     
     
     def _register_custom_metrics(self):
-        raise NotImplementedError
+        self.loss_names = []
+        self.metric_names = []
+        self.tracker.register(self.loss_names + self.metric_names)
+        raise NotImplementedError("Please register your custom metrics in this method.")
     
     def _log_metrics(self, epoch):
+        if self.config.debug_epoch or self.config.debug_step:
+            return
         raise NotImplementedError
     
     def _log_loss(self, step):
-        loss_names = [name for name in self.tracker.metrics.keys() if name.endswith('loss')]
+        if self.config.debug_epoch or self.config.debug_step:
+            return
         
+        loss_names = self.loss_names + ['total_loss']
         losses = self.tracker.fetch(loss_names, reductions='mean')
         self.tracker.register(loss_names)
         self.accelerator.log(losses, step=step)
