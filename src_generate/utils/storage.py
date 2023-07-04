@@ -138,7 +138,6 @@ class MetricTracker:
         if len(reductions) == 1:
             different_reduction = False
             reduce_values = Reduction.get(reductions[0])
-            reductions = [reductions[0]] * len(names)
         else:
             different_reduction = True
             assert len(reductions) >= len(names), "Number of reductions must be no less than number of names"

@@ -2,6 +2,7 @@ import argparse
 import yaml
 from pathlib import Path
 from easydict import EasyDict
+from pprint import pprint
 
 def parse_args():
     parser = argparse.ArgumentParser(description='')
@@ -12,6 +13,8 @@ def parse_args():
     group.add_argument('--train', action='store_true')
     group.add_argument('--eval', action='store_true')
     group.add_argument('--sample', action='store_true')
+    # print arguments
+    parser.add_argument('--print', action='store_true')
 
     return parser.parse_args()
 
@@ -132,8 +135,25 @@ def get_config() -> EasyDict:
     
     assert 'experiment_name' in config and config['experiment_name'] is not None, 'experiment_name is empty'
     assert 'trial_index' in config and config['trial_index'] is not None, 'trial_index is empty'
+    
+    if args.print:
+        pprint(config)
+        exit()
+        
     return EasyDict(config)
 
-from pprint import pprint
+def edict2dict(edict: EasyDict):
+    """ 
+    Convert EasyDict to dict.
+    """
+    d = {}
+    for k, v in edict.items():
+        if isinstance(v, EasyDict):
+            d[k] = edict2dict(v)
+        else:
+            d[k] = v
+    return d
 
-pprint(get_config())
+def save_config(config: EasyDict, path):
+    with open(path, 'w') as f:
+        yaml.dump(edict2dict(config), f)

@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import models as Models
 import datasets as Datasets
 from utils import Optimizer, MetricTracker, SyncMetricTracker
+from utils.options import save_config
 
 import torch
 from torch.utils.data import DataLoader
@@ -32,7 +33,8 @@ class Trainer:
         
         # init tracker
         run = f"trial-{self.config.trial_index}"
-        self.accelerator.init_trackers(run, dict(self.config))
+        self.accelerator.init_trackers(run)
+        save_config(self.config, self.trial_dir / 'config.yaml')
         self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
         self.tracker.register('total_loss')
         self._register_custom_metrics()
@@ -41,7 +43,9 @@ class Trainer:
         start_step = total_step
         # Training Loop
         for epoch in range(self.start_epoch, self.start_epoch + train_config.num_epochs):
+            self.model.train()
             for batch_idx, batch in enumerate(self.train_dataloader):
+                self.model.train()
                 with self.accelerator.accumulate(self.model):
                     inputs, targets = batch
                     loss_dict, weight_dict = self._compute_loss(inputs, targets)
@@ -87,13 +91,9 @@ class Trainer:
           weight_dict: dict of weights for each loss
         
         Example:
-        >>> outputs = self.model(inputs)
-        >>> loss = self.unwrap_model.compute_loss(outputs, targets)
-        >>> return {"loss": loss}
-        
-        Note that all keys in loss_dict should be ended with 'loss', e.g. 'total_loss', 'cls_loss', 'reg_loss', otherwise they will 
-        not be captured when calculating total loss.
-            
+            >>> outputs = self.model(inputs)
+            >>> loss = self.unwrap_model.compute_loss(outputs, targets)
+            >>> return loss
         """
         raise NotImplementedError
     
@@ -106,8 +106,8 @@ class Trainer:
     
     def _log_loss(self, step):
         loss_names = [name for name in self.tracker.metrics.keys() if name.endswith('loss')]
-        losses = self.tracker.fetch(loss_names, reductions='mean')
         
+        losses = self.tracker.fetch(loss_names, reductions='mean')
         self.tracker.register(loss_names)
         self.accelerator.log(losses, step=step)
             
@@ -129,6 +129,7 @@ class Trainer:
         
     def _save_checkpoint(self, epoch):
         self.accelerator.wait_for_everyone()
+        self.model.eval()
         if self.accelerator.is_main_process:
             checkpoint = {"epoch": epoch}
             checkpoint["model"] = self.unwrap_model.state_dict()
