@@ -13,7 +13,7 @@ model:
   name: # model class name
   params:
 
-  checkpoint_path: 
+  checkpoint_path: " "
 
 #* dataset config
 dataset:

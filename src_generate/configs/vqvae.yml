@@ -31,7 +31,7 @@ model:
       reset_threshold: 0.01
       epsilon: 0.00001
 
-  checkpoint_path: 
+  checkpoint_path: " "
 
 #* dataset config
 dataset:

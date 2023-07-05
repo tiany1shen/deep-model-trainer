@@ -35,7 +35,7 @@ class Trainer:
         
         # init tracker
         if not self.debug:
-            run = f"trial-{self.config.trial_index}"
+            run = f"{self.config.mode}-{self.config.trial_index}"
             self.accelerator.init_trackers(run)
             save_config(self.config, self.trial_dir / 'config.yaml')
         self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
@@ -256,8 +256,9 @@ class Trainer:
         self.trial_index = self.config.trial_index
         
         self.log_dir = Path(self.experiment_dir, self.experiment_name, 'logs')
-        self.trial_dir = Path(self.experiment_dir, self.experiment_name, f"trial-{self.trial_index}")
-        self.checkpoint_dir = Path(self.trial_dir, 'checkpoints')
+        self.trial_dir = Path(self.experiment_dir, self.experiment_name, f"{self.config.mode}-{self.trial_index}")
+        if self.config.mode == 'train':
+            self.checkpoint_dir = Path(self.trial_dir, 'checkpoints')
         if hasattr(self.config, 'sample'):
             self.sample_dir = Path(self.trial_dir, 'samples')
             
@@ -265,7 +266,8 @@ class Trainer:
             return 
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.trial_dir.mkdir(parents=True, exist_ok=True)
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        if hasattr(self, 'checkpoint_dir'):
+            self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         if hasattr(self, 'sample_dir'):
             self.sample_dir.mkdir(parents=True, exist_ok=True)
 

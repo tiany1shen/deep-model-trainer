@@ -1,0 +1,5 @@
+trial_index: 6
+
+model:
+  checkpoint_path: /scratch/shenty/deep-model-trainer/experiments/MNIST-Generate-VQVAE/trial-4/checkpoints/epoch-100.pth
+

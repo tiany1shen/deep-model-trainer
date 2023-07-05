@@ -52,22 +52,23 @@ class VqVaeTrainer(Trainer):
     @torch.no_grad()
     def eval(self, epoch=0):
         if not self.debug:
-            run = f"trial-{self.config.trial_index}"
+            run = f"{self.config.mode}-{self.config.trial_index}"
             self.accelerator.init_trackers(run)
             save_config(self.config, self.trial_dir / 'config.yaml')
         self.model.eval()
         n_samples = self.config.eval.num_sample
         for (inputs, targets) in self.eval_dataloader:
             inputs = inputs[:n_samples]
-            recon, _, _ = self.model(inputs)
-            
-            pic = torch.cat([inputs, recon], dim=0)
+            # recon, _, _ = self.model(inputs)
+            latent = self.unwrap_model.encoder(inputs)
+            #! 修改VectorQuantizer的quantize方法，返回 onehot_code 和 x_q
+            # pic = torch.cat([inputs, recon], dim=0)
             pic = self.eval_dataloader.dataset.inv_transforms()(pic)
             
-            grid = rearrange(pic, "(nr nc) c h w -> () c (nr h) (nc w)", nr=2, nc=n_samples)
+            grid = rearrange(pic, "(nr nc) c h w -> () c (nr h) (nc w)", nr=1, nc=n_samples)
             
             for tracker in self.accelerator.trackers:
-                tracker.log_images({"image": grid}, step=epoch)
+                tracker.log_images({"latent_image": grid}, step=epoch)
             break
             
             
