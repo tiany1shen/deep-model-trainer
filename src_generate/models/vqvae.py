@@ -63,4 +63,12 @@ class VQVAE(nn.Module):
         onehot_code = self.quantizer.quantize(flat_emb)
         return rearrange(onehot_code, '(b h w) d -> b d h w', b=b, h=h, w=w)
 
+    @torch.no_grad()
+    def decode(self, onehot_code: Tensor):
+        b, d, h, w = onehot_code.shape
+        
+        onehot_code = rearrange(onehot_code, 'b d h w -> (b h w) d')
+        quant_emb = self.quantizer.dequantize(onehot_code)
+        quant_emb = rearrange(quant_emb, '(b h w) c -> b c h w', b=b, h=h, w=w)
+        return self.decoder(quant_emb)
         

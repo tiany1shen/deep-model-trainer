@@ -5,6 +5,7 @@ import models as Models
 import datasets as Datasets
 from utils import Optimizer, MetricTracker, SyncMetricTracker
 from utils.options import save_config
+from utils.progress import print_progress
 
 import torch
 from torch.utils.data import DataLoader
@@ -17,6 +18,7 @@ from accelerate import DistributedDataParallelKwargs as DDPKwargs
 class Trainer:
     def __init__(self, config: EasyDict):
         self.config = config
+        self.debug = self.config.debug_epoch or self.config.debug_step
         torch.backends.cudnn.benchmark = True
         self._build()
         
@@ -32,32 +34,31 @@ class Trainer:
         #     self.ema = None 
         
         # init tracker
-        if not (self.config.debug_epoch or self.config.debug_step):
+        if not self.debug:
             run = f"trial-{self.config.trial_index}"
             self.accelerator.init_trackers(run)
-        save_config(self.config, self.trial_dir / 'config.yaml')
+            save_config(self.config, self.trial_dir / 'config.yaml')
         self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
         self.tracker.register('total_loss')
         self._register_custom_metrics()
         
         total_step = (self.start_epoch - 1) * int(len(self.train_dataloader) // self.config.gradient_accumulation_steps)
-        start_step = total_step
         # Training Loop
         for epoch in range(self.start_epoch, self.start_epoch + train_config.num_epochs):
-            self.model.train()
             for batch_idx, batch in enumerate(self.train_dataloader):
                 self.model.train()
+                
+                self.print_progress(epoch, batch_idx, len(self.train_dataloader))
                 with self.accelerator.accumulate(self.model):
                     inputs, targets = batch
                     loss_dict, weight_dict = self._compute_loss(inputs, targets)
                     
-                    if len(loss_dict) > 1:
-                        self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
-                    
+                    self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
                     total_loss = sum(loss_dict[name] * weight_dict[name] for name in loss_dict.keys())
                     self.tracker.update({'total_loss': total_loss.detach().float()})
                     
                     self.accelerator.backward(total_loss)
+                    
                     self.optimizer.step()
                     # self.scheduler.step()
                     self.optimizer.zero_grad()
@@ -116,7 +117,9 @@ class Trainer:
     def _log_metrics(self, epoch):
         if self.config.debug_epoch or self.config.debug_step:
             return
-        raise NotImplementedError
+        metrics = self.tracker.fetch(self.metric_names, reductions='last')
+        self.tracker.register(self.metric_names)
+        self.accelerator.log(metrics, step=epoch)
     
     def _log_loss(self, step):
         if self.config.debug_epoch or self.config.debug_step:
@@ -253,16 +256,17 @@ class Trainer:
         self.trial_index = self.config.trial_index
         
         self.log_dir = Path(self.experiment_dir, self.experiment_name, 'logs')
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        
         self.trial_dir = Path(self.experiment_dir, self.experiment_name, f"trial-{self.trial_index}")
-        self.trial_dir.mkdir(parents=True, exist_ok=True)
-        
         self.checkpoint_dir = Path(self.trial_dir, 'checkpoints')
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        
         if hasattr(self.config, 'sample'):
             self.sample_dir = Path(self.trial_dir, 'samples')
+            
+        if self.debug:
+            return 
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.trial_dir.mkdir(parents=True, exist_ok=True)
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        if hasattr(self, 'sample_dir'):
             self.sample_dir.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -271,3 +275,10 @@ class Trainer:
             return self.model.module
         else:
             return self.model
+        
+    def print_progress(self, epoch, batch_idx, epoch_len, length=10):
+        if self.debug:
+            return
+        progress_bar = print_progress(epoch, self.start_epoch + self.config.train.num_epochs - 1, batch_idx+1, epoch_len, length=length)
+        end_char = "\n" if epoch == self.start_epoch + self.config.train.num_epochs - 1 and batch_idx == epoch_len - 1 else "\r"
+        self.accelerator.print(progress_bar, end=end_char)

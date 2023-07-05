@@ -18,7 +18,7 @@ def parse_args():
     # debug
     debug_gp = parser.add_mutually_exclusive_group()
     debug_gp.add_argument('--debug_epoch', action='store_true')
-    debug_gp.add_argument('--debug_step',action='store_true')
+    debug_gp.add_argument('--debug_iter',action='store_true')
 
     return parser.parse_args()
 
@@ -145,7 +145,7 @@ def get_config() -> EasyDict:
         exit()
         
     config['debug_epoch'] = args.debug_epoch
-    config['debug_step'] = args.debug_step
+    config['debug_step'] = args.debug_iter
     return EasyDict(config)
 
 def edict2dict(edict: EasyDict):

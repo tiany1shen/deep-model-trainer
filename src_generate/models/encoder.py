@@ -43,13 +43,30 @@ class CenterCrop2d(nn.Module):
         
     def forward(self, x: Tensor):
         _, _, h, w = x.shape
-        top = h // 2 + self.height // 2
-        left = w // 2 + self.width // 2
+        top = h // 2 - self.height // 2
+        left = w // 2 - self.width // 2
         return crop(x, top, left, self.height, self.width)
-        
+    
+class Clamp(nn.Module):
+    def __init__(self, *values) -> None:
+        super().__init__()
+        if values is None:
+            self.lower = -1.0
+            self.upper = 1.0
+        elif len(values) == 1:
+            self.lower = -values[0]
+            self.upper = values[0]
+        elif len(values) == 2:
+            self.lower = values[0]
+            self.upper = values[1]
+        else:
+            raise NotImplementedError()
+    
+    def forward(self, x):
+        return x.clamp(self.lower, self.upper)
         
 class Encoder(nn.Module):
-    def __init__(self, input_dim: int, hidden_dims: int, padding: int):
+    def __init__(self, input_dim: int, hidden_dims: list[int], padding: int):
         super().__init__()
         in_channels = input_dim
         self.input_layer = nn.ZeroPad2d(padding)
@@ -71,7 +88,7 @@ class Encoder(nn.Module):
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, output_dim: int, hidden_dims: int, cropping: int):
+    def __init__(self, output_dim: int, hidden_dims: list[int], cropping: int):
         super().__init__()
         in_channels = hidden_dims[0]
         hidden_dims = hidden_dims[1:] + [output_dim]
@@ -85,8 +102,12 @@ class Decoder(nn.Module):
             ])
             self.layers.append(nn.Sequential(*modules))
             in_channels = out_channels
-        self.output_layer = CenterCrop2d(cropping)
-        
+        self.output_layer = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=1, padding=0),
+            nn.BatchNorm2d(in_channels),
+            Clamp(1.0),
+            CenterCrop2d(cropping)
+        )
     def forward(self, x: Tensor):
         for layer in self.layers:
             x = layer(x)

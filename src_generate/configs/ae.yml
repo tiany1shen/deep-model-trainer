@@ -1,7 +1,7 @@
 #* fill experiment info
-experiment_name: MNIST-Generate-VQVAE
-trial_index: 4
-trainer_name: VqVaeTrainer
+experiment_name: MNIST-Generate-AE
+trial_index: 9
+trainer_name: AutoEncoderTrainer
 
 use_cpu: false
 gradient_accumulation_steps: 1
@@ -10,26 +10,22 @@ log_metrics: true
 
 #* model config
 model:
-  name: VQVAE
+  name: AutoEncoder
   params:
     encoder:
       input_dim: 1
       hidden_dims:
         - 16
-        - 1
+        - 64
+        - 128
       padding: 2
     decoder:
       output_dim: 1
       hidden_dims:
-        - 1
+        - 128
+        - 64
         - 16
       cropping: 28
-    quantizer:
-      codebook_dim: 1
-      codebook_num: 128
-      decay: 0.99
-      reset_threshold: 0.01
-      epsilon: 0.00001
 
   checkpoint_path: 
 
