@@ -66,8 +66,8 @@ train:
   optimizer: Adam
   learning_rate: 0.001
   use_ema: false
-  # need_other_modes:
-  #   - eval
+  need_other_modes:
+    - eval
   need_datasets:
     - train
   
@@ -86,7 +86,7 @@ train:
 
 #* evaluating config
 eval:
-  batch_size: 32
+  batch_size: 2
   # need_other_modes:
   #   - null
   need_datasets:
