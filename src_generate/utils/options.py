@@ -145,7 +145,7 @@ def get_config() -> EasyDict:
         exit()
         
     config['debug_epoch'] = args.debug_epoch
-    config['debug_step'] = args.debug_iter
+    config['debug_iter'] = args.debug_iter
     return EasyDict(config)
 
 def edict2dict(edict: EasyDict):

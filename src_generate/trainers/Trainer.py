@@ -18,7 +18,7 @@ from accelerate import DistributedDataParallelKwargs as DDPKwargs
 class Trainer:
     def __init__(self, config: EasyDict):
         self.config = config
-        self.debug = self.config.debug_epoch or self.config.debug_step
+        self.debug = self.config.debug_epoch or self.config.debug_iter
         torch.backends.cudnn.benchmark = True
         self._build()
         
@@ -39,8 +39,8 @@ class Trainer:
             self.accelerator.init_trackers(run)
             save_config(self.config, self.trial_dir / 'config.yaml')
         self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
-        self.tracker.register('total_loss')
         self._register_custom_metrics()
+        self.tracker.register('total_loss')
         
         total_step = (self.start_epoch - 1) * int(len(self.train_dataloader) // self.config.gradient_accumulation_steps)
         # Training Loop
@@ -70,7 +70,7 @@ class Trainer:
                     if total_step % train_config.log_interval == 0:
                         self._log_loss(total_step)
 
-                    if self.config.debug_step:
+                    if self.config.debug_iter:
                         self.accelerator.print('Debug mode, only run 1 step.')
                         return
             
@@ -115,16 +115,15 @@ class Trainer:
         raise NotImplementedError("Please register your custom metrics in this method.")
     
     def _log_metrics(self, epoch):
-        if self.config.debug_epoch or self.config.debug_step:
+        if self.debug:
             return
         metrics = self.tracker.fetch(self.metric_names, reductions='last')
         self.tracker.register(self.metric_names)
         self.accelerator.log(metrics, step=epoch)
     
     def _log_loss(self, step):
-        if self.config.debug_epoch or self.config.debug_step:
+        if self.debug:
             return
-        
         loss_names = self.loss_names + ['total_loss']
         losses = self.tracker.fetch(loss_names, reductions='mean')
         self.tracker.register(loss_names)
