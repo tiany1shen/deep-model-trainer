@@ -51,10 +51,6 @@ class VqVaeTrainer(Trainer):
     
     @torch.no_grad()
     def eval(self, epoch=0):
-        if not self.debug:
-            run = f"{self.config.mode}-{self.config.trial_index}"
-            self.accelerator.init_trackers(run)
-            save_config(self.config, self.trial_dir / 'config.yaml')
         self.model.eval()
         n_samples = self.config.eval.num_sample
         for (inputs, targets) in self.eval_dataloader:

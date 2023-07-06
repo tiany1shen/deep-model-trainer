@@ -22,8 +22,10 @@ class GptTrainer(Trainer):
         self.encoder.eval()
         
     def _register_custom_metrics(self):
+        #! 修改这里：自动从 config 里读取 loss_names 和 metric_names
         self.loss_names = ["label_loss", "predict_loss"]
         self.metric_names = []
+        #! 修改 MetricTracker 的 register 方法，使其可以接受一个 空列表 []
         self.tracker.register(self.loss_names + self.metric_names)
         
     def _compute_loss(self, inputs, targets):
@@ -65,10 +67,6 @@ class GptTrainer(Trainer):
     
     @torch.no_grad()
     def eval(self, epoch=0):
-        if not self.debug:
-            run = f"trial-{self.config.trial_index}"
-            self.accelerator.init_trackers(run)
-            save_config(self.config, self.trial_dir / 'config.yaml')
         self.model.eval()
         sen, label = self.unwrap_model.generate()
         b = sen.shape[0]

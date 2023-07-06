@@ -27,19 +27,6 @@ class Trainer:
         train_config = self.config.train
         self.model.train()
         
-        # init ema
-        # if hasattr(train_config, 'use_ema') and train_config.use_ema:
-        #     self._init_ema()
-        # else:
-        #     self.ema = None 
-        
-        # init tracker
-        if not self.debug:
-            run = f"{self.config.mode}-{self.config.trial_index}"
-            self.accelerator.init_trackers(run)
-            save_config(self.config, self.trial_dir / 'config.yaml')
-        self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
-        self._register_custom_metrics()
         self.tracker.register('total_loss')
         
         total_step = (self.start_epoch - 1) * int(len(self.train_dataloader) // self.config.gradient_accumulation_steps)
@@ -109,7 +96,7 @@ class Trainer:
     
     
     def _register_custom_metrics(self):
-        self.loss_names = []
+        self.loss_names = [] 
         self.metric_names = []
         self.tracker.register(self.loss_names + self.metric_names)
         raise NotImplementedError("Please register your custom metrics in this method.")
@@ -160,6 +147,7 @@ class Trainer:
         self._build_models()
         self._build_dataloaders()
         self._build_optimizer()
+        self._build_trackers()
         
     def _ddp_setting(self):
         cpu = self.config.use_cpu
@@ -269,7 +257,18 @@ class Trainer:
             self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         if hasattr(self, 'sample_dir'):
             self.sample_dir.mkdir(parents=True, exist_ok=True)
-
+       
+    def _build_trackers(self):
+        # build accelerator logger
+        if not self.debug:
+            run = f"{self.config.mode}-{self.config.trial_index}"
+            self.accelerator.init_trackers(run)
+            save_config(self.config, self.trial_dir / 'config.yaml')
+            
+        # build metric trackers
+        self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
+        self._register_custom_metrics()
+        
     @property
     def unwrap_model(self):
         if self.ddp_wrapped:
