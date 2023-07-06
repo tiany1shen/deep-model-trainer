@@ -46,12 +46,12 @@ class VqVaeTrainer(Trainer):
         for (inputs, targets) in self.eval_dataloader:
             inputs = inputs[:n_samples]
             
-            latent = self.unwrap_model.encode(inputs)
-            recon = self.unwrap_model.decode(latent)
+            quant_emb, onehot_code = self.unwrap_model.encode(inputs)
+            recon = self.unwrap_model.decode(quant_emb)
             pic = torch.cat([inputs, recon], dim=0)
             pic = self.eval_dataloader.dataset.inv_transforms()(pic)
             
-            grid = rearrange(pic, "(nr nc) c h w -> () c (nr h) (nc w)", nr=1, nc=n_samples)
+            grid = rearrange(pic, "(nr nc) c h w -> () c (nr h) (nc w)", nr=2, nc=n_samples)
             
             for tracker in self.accelerator.trackers:
                 tracker.log_images({"latent_image": grid}, step=epoch)

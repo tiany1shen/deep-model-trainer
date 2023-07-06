@@ -1,0 +1,3 @@
+trial_index: 1
+model:
+  checkpoint_path: experiments/MNIST-Generate-VQVAE/train-1/checkpoints/epoch-100.pth

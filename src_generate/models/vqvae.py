@@ -75,6 +75,19 @@ class VQVAE(nn.Module):
         quant_emb = unflatten(quant_emb, shape_emb)
         onehot_code = unflatten(onehot_code, shape_emb)
         return quant_emb, onehot_code
+    
+    def code2emb(self, onehot_code: Tensor):
+        flatten_code, shape_code = flatten(onehot_code)
+        quant_emb = torch.matmul(flatten_code, self.quantizer.codebook)
+        quant_emb = unflatten(quant_emb, shape_code)
+        return quant_emb
+    
+    def index2emb(self, word: Tensor):
+        flatten_word, shape_word = flatten(word)
+        flatten_code = F.one_hot(flatten_word.squeeze(-1), self.codebook_num).float()
+        quant_emb = torch.matmul(flatten_code, self.quantizer.codebook)
+        quant_emb = unflatten(quant_emb, shape_word)
+        return quant_emb
 
     @torch.no_grad()
     def decode(self, onehot_code: Tensor):
@@ -88,11 +101,10 @@ class VQVAE(nn.Module):
         """
         # when `onehot_code` is actually indices of codewords
         if onehot_code.dtype == torch.int64:
-            onehot_code = F.one_hot(onehot_code, self.codebook_num).float()
-            quant_emb = torch.matmul(onehot_code, self.codebook)
+            quant_emb = self.index2emb(onehot_code)
         # when `onehot_code` is one-hot code
         elif onehot_code.shape[1] == self.codebook_num:
-            quant_emb = torch.matmul(onehot_code, self.codebook)
+            quant_emb = self.code2emb(onehot_code)
         # when `onehot_code` is actually quantized embedding
         elif onehot_code.shape[1] == self.latent_dim:
             quant_emb = onehot_code

@@ -1,0 +1,4 @@
+trial_index: 1
+
+model:
+  checkpoint_path: experiments/MNIST-Generate-Prior/train-2/checkpoints/epoch-100.pth
