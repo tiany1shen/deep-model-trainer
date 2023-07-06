@@ -4,7 +4,8 @@ from .quantizer import VectorQuantizer_EMA_Reset
 from .encoder import Encoder, Decoder
 from easydict import EasyDict
 from torch import nn, Tensor
-from einops import rearrange
+from torch.nn import functional as F
+from einops import rearrange, parse_shape
 
 
 class VectorQuantizer(VectorQuantizer_EMA_Reset):
@@ -23,15 +24,30 @@ class VaeEncoder(Encoder):
     def __init__(self, args: EasyDict):
         super().__init__(
             input_dim=args.input_dim, 
-            hidden_dims=args.hidden_dims, 
-            padding=args.padding)
+            output_dim=args.output_dim,
+            hidden_dims=args.hidden_dims)
 
 class VaeDecoder(Decoder):
     def __init__(self, args: EasyDict):
         super().__init__(
+            input_dim=args.input_dim,
             output_dim = args.output_dim, 
-            hidden_dims = args.hidden_dims, 
-            cropping = args.cropping)
+            hidden_dims = args.hidden_dims)
+
+def flatten(x: Tensor):
+    if len(x.shape) == 3:
+        shape_x = parse_shape(x, 'b c t')
+    if len(x.shape) == 4:
+        shape_x = parse_shape(x, 'b c h w')
+    return rearrange(x, 'b c ... -> (b ...) c'), shape_x
+
+def unflatten(x: Tensor, shape: tuple):
+    if "c" in shape:
+        del shape["c"]
+    if len(shape) == 2:
+        return rearrange(x, '(b t) c -> b c t', **shape)
+    if len(shape) == 3:
+        return rearrange(x, '(b h w) c -> b c h w', **shape)
         
 class VQVAE(nn.Module):
     def __init__(self, args: EasyDict):
@@ -45,30 +61,40 @@ class VQVAE(nn.Module):
         
     def forward(self, x: Tensor):
         emb = self.encoder(x)
-        b, c, h, w = emb.shape
-        
-        flat_emb = rearrange(emb, 'b c h w -> (b h w) c')
-        quant_emb, onehot_code, commit_loss, ppl = self.quantizer(flat_emb)
-        
-        quant_emb = rearrange(quant_emb, '(b h w) c -> b c h w', b=b, h=h, w=w)
+        flat_emb, shape_emb = flatten(emb)
+        quant_emb, _, commit_loss, ppl = self.quantizer(flat_emb)
+        quant_emb = unflatten(quant_emb, shape_emb)
         recon_x = self.decoder(quant_emb)
         return recon_x, commit_loss, ppl
     
     @torch.no_grad()
     def encode(self, x: Tensor):
         emb = self.encoder(x)
-        b, c, h, w = emb.shape
-        
-        flat_emb = rearrange(emb, 'b c h w -> (b h w) c')
-        onehot_code = self.quantizer.quantize(flat_emb)
-        return rearrange(onehot_code, '(b h w) d -> b d h w', b=b, h=h, w=w)
+        flat_emb, shape_emb = flatten(emb)
+        quant_emb, onehot_code = self.quantizer.quantize(flat_emb)
+        quant_emb = unflatten(quant_emb, shape_emb)
+        onehot_code = unflatten(onehot_code, shape_emb)
+        return quant_emb, onehot_code
 
     @torch.no_grad()
     def decode(self, onehot_code: Tensor):
-        b, d, h, w = onehot_code.shape
-        
-        onehot_code = rearrange(onehot_code, 'b d h w -> (b h w) d')
-        quant_emb = self.quantizer.dequantize(onehot_code)
-        quant_emb = rearrange(quant_emb, '(b h w) c -> b c h w', b=b, h=h, w=w)
+        """ 
+        Args: 
+          onehot_code: (b, c, ...) tensor. Channel shape can be: 
+            c = 1: when `onehot_code.dtype == torch.int64`, the input is actually indices of codewords
+                   otherwise means latent embeddings are 1-dim or codebook size is only 1, which are rare cases.
+            c = codebook_num: this means the input is one-hot codes
+            c = latent_dim: this means the input is quantized embeddings
+        """
+        # when `onehot_code` is actually indices of codewords
+        if onehot_code.dtype == torch.int64:
+            onehot_code = F.one_hot(onehot_code, self.codebook_num).float()
+            quant_emb = torch.matmul(onehot_code, self.codebook)
+        # when `onehot_code` is one-hot code
+        elif onehot_code.shape[1] == self.codebook_num:
+            quant_emb = torch.matmul(onehot_code, self.codebook)
+        # when `onehot_code` is actually quantized embedding
+        elif onehot_code.shape[1] == self.latent_dim:
+            quant_emb = onehot_code
         return self.decoder(quant_emb)
         

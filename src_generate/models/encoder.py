@@ -1,6 +1,5 @@
 from torch import nn, Tensor
 from torch.nn import functional as F
-from torchvision.transforms.functional import crop
  
 class ResidualLayer(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, kernel_size: int):
@@ -32,44 +31,13 @@ class UpSampleLayer(ResidualLayer):
         super().__init__(in_channels, out_channels, kernel_size)
         self._conv_1 = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size+1, stride=2, padding=kernel_size//2)
         self._identity = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-        
-class CenterCrop2d(nn.Module):
-    def __init__(self, size: int):
-        super().__init__()
-        if isinstance(size, int):
-            size = (size, size)
-        self.height = size[0]
-        self.width = size[1]
-        
-    def forward(self, x: Tensor):
-        _, _, h, w = x.shape
-        top = h // 2 - self.height // 2
-        left = w // 2 - self.width // 2
-        return crop(x, top, left, self.height, self.width)
-    
-class Clamp(nn.Module):
-    def __init__(self, *values) -> None:
-        super().__init__()
-        if values is None:
-            self.lower = -1.0
-            self.upper = 1.0
-        elif len(values) == 1:
-            self.lower = -values[0]
-            self.upper = values[0]
-        elif len(values) == 2:
-            self.lower = values[0]
-            self.upper = values[1]
-        else:
-            raise NotImplementedError()
-    
-    def forward(self, x):
-        return x.clamp(self.lower, self.upper)
+
         
 class Encoder(nn.Module):
-    def __init__(self, input_dim: int, hidden_dims: list[int], padding: int):
+    def __init__(self, input_dim: int, output_dim: int, hidden_dims: list[int]):
         super().__init__()
         in_channels = input_dim
-        self.input_layer = nn.ZeroPad2d(padding)
+        self.input_layer = nn.Identity()
         self.layers = nn.ModuleList([])
         for out_channels in hidden_dims:
             modules = []
@@ -80,18 +48,22 @@ class Encoder(nn.Module):
             ])
             self.layers.append(nn.Sequential(*modules))
             in_channels = out_channels
+        self.output_layer = nn.Sequential(
+            nn.Conv2d(in_channels, output_dim, kernel_size=1),
+            nn.BatchNorm2d(output_dim),
+        )
     
     def forward(self, x: Tensor):
         x = self.input_layer(x)
         for layer in self.layers:
             x = layer(x)
-        return x
+        return self.output_layer(x)
     
 class Decoder(nn.Module):
-    def __init__(self, output_dim: int, hidden_dims: list[int], cropping: int):
+    def __init__(self, input_dim: int, output_dim: int, hidden_dims: list[int]):
         super().__init__()
-        in_channels = hidden_dims[0]
-        hidden_dims = hidden_dims[1:] + [output_dim]
+        in_channels = input_dim
+        self.input_layer = nn.Identity()
         self.layers = nn.ModuleList([])
         for out_channels in hidden_dims:
             modules = []
@@ -103,12 +75,11 @@ class Decoder(nn.Module):
             self.layers.append(nn.Sequential(*modules))
             in_channels = out_channels
         self.output_layer = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, kernel_size=1, padding=0),
-            nn.BatchNorm2d(in_channels),
-            Clamp(1.0),
-            CenterCrop2d(cropping)
+            nn.Conv2d(in_channels, output_dim, kernel_size=1),
+            nn.BatchNorm2d(output_dim),
         )
     def forward(self, x: Tensor):
+        x = self.input_layer(x)
         for layer in self.layers:
             x = layer(x)
-        return self.output_layer(x)
+        return self.output_layer(x).clamp(-1.0, 1.0)

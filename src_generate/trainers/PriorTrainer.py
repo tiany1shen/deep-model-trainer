@@ -4,6 +4,7 @@ import models
 import torch
 from easydict import EasyDict
 from torch.nn import functional as F
+from torchvision.utils import make_grid
 from einops import rearrange
 
 from utils.options import save_config
@@ -21,35 +22,24 @@ class GptTrainer(Trainer):
         self.encoder = self.accelerator.prepare(self.encoder)
         self.encoder.eval()
         
-    def _register_custom_metrics(self):
-        #! 修改这里：自动从 config 里读取 loss_names 和 metric_names
-        self.loss_names = ["label_loss", "predict_loss"]
-        self.metric_names = []
-        #! 修改 MetricTracker 的 register 方法，使其可以接受一个 空列表 []
-        self.tracker.register(self.loss_names + self.metric_names)
-        
     def _compute_loss(self, inputs, targets):
-        onehot_code = self.encoder.encode(inputs)
-        indices = onehot_code.argmax(dim=1)
-        sentences = rearrange(indices, 'b h w -> b (h w)')
-        label = rearrange(targets, 'b -> b ()')
+        _, onehot_code = self.encoder.encode(inputs)
+        indices = rearrange(onehot_code, 'b d h w -> b (h w) d').argmax(dim=-1)
+        labels = targets
+        # indices: (batch_size, sen_len)
+        # labels: (batch_size, )
         
-        cls_logit, word_logits = self.model(sentences, label)
+        cls_logit, word_logits = self.model(indices, labels)
         
-        cls_logit = rearrange(cls_logit, 'b () c -> b c')
-        label = rearrange(label, 'b () -> b')
-        cls_loss = F.cross_entropy(cls_logit, label)
+        cls_loss = F.cross_entropy(cls_logit, labels)
+        word_logits = rearrange(word_logits, 'b hw v -> b v hw')
+        predict_loss = F.cross_entropy(word_logits, indices)
         
-        word_logits = rearrange(word_logits, 'b d c -> b c d')
-        predict_loss = F.cross_entropy(word_logits, sentences)
-        
-        return {"label_loss": cls_loss, "predict_loss": predict_loss}, {"label_loss": 1.0, "predict_loss": 1.0}
-    
-    def _log_metrics(self, epoch):
-        pass 
+        return {"Class_Loss": cls_loss, "Predict_Loss": predict_loss}, dict(zip(self.loss_names, self.loss_weights))
     
     @torch.no_grad()
     def _eval_epoch(self, epoch):
+        return
         self.model.eval()
         sen, label = self.unwrap_model.generate()
         b = sen.shape[0]
@@ -66,18 +56,34 @@ class GptTrainer(Trainer):
             tracker.log({"samples": str(label.item())}, epoch)
     
     @torch.no_grad()
-    def eval(self, epoch=0):
-        self.model.eval()
-        sen, label = self.unwrap_model.generate()
-        b = sen.shape[0]
-        onehot_code = F.one_hot(sen, self.encoder.codebook_num)
-        onehot_code = rearrange(onehot_code, 'b n d -> (b n) d')
-        quant_emb = self.encoder.quantizer.dequantize(onehot_code)
-        quant_emb = rearrange(quant_emb, '(b h w) c -> b c h w', h=4, w=4)
-        imgs = self.encoder.decoder(quant_emb)
+    def eval(self):
+        # self.model.eval()
+        # sen, label = self.unwrap_model.generate()
+        # b = sen.shape[0]
+        # onehot_code = F.one_hot(sen, self.encoder.codebook_num)
+        # onehot_code = rearrange(onehot_code, 'b n d -> (b n) d')
+        # quant_emb = self.encoder.quantizer.dequantize(onehot_code)
+        # quant_emb = rearrange(quant_emb, '(b h w) c -> b c h w', h=4, w=4)
+        # imgs = self.encoder.decoder(quant_emb)
         
-        grid = rearrange(imgs, 'b c h w -> () c h (b w)')
+        # grid = rearrange(imgs, 'b c h w -> () c h (b w)')
+        
+        # for tracker in self.accelerator.trackers:
+        #     tracker.log_images({"samples": grid}, epoch)
+        #     tracker.log({"samples": str(label.item())}, epoch)
+        
+        freq = torch.zeros(self.encoder.codebook_num, 7, 7)
+        
+        for batch_idx, (inputs, targets) in enumerate(self.eval_dataloader):
+            self.print_progress(1, 1, batch_idx, len(self.eval_dataloader), 30)
+            quant_emb, onehot_code = self.encoder.encode(inputs)
+            freq += onehot_code.sum(dim=0).to(freq.device)
+        
+        freq = rearrange(freq, 'n h w -> (h w) n')
+        freq = freq / freq.sum(dim=-1, keepdim=True)
         
         for tracker in self.accelerator.trackers:
-            tracker.log_images({"samples": grid}, epoch)
-            tracker.log({"samples": str(label.item())}, epoch)
+            for i in range(freq.shape[0]):
+                prob = freq[i].float().numpy()
+                tracker.writer.add_histogram(f"freq", prob, i)
+    

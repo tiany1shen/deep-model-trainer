@@ -1,10 +1,10 @@
 #* fill experiment info
 experiment_name: MNIST-Generate-Prior
-trial_index: 1
+trial_index: 4
 trainer_name: GptTrainer
 
 use_cpu: false
-gradient_accumulation_steps: 1
+gradient_accumulation_steps: 2
 split_batches: true
 log_metrics: true
 
@@ -14,7 +14,7 @@ model:
   params:
     num_class: 10
     num_vocab: 128
-    sen_len: 16
+    sen_len: 49
     num_layer: 2
     num_head: 4
     dim: 256
@@ -26,26 +26,24 @@ encoder:
   params:
     encoder:
       input_dim: 1
-      hidden_dims:
-        - 16
-        - 64
-        - 128
-      padding: 2
-    decoder:
       output_dim: 1
       hidden_dims:
-        - 128
-        - 64
         - 16
-      cropping: 28
+        - 32
+    decoder:
+      input_dim: 1
+      output_dim: 1
+      hidden_dims:
+        - 32
+        - 16
     quantizer:
-      codebook_dim: 128
+      codebook_dim: 1
       codebook_num: 128
       decay: 0.99
       reset_threshold: 0.01
       epsilon: 0.00001
 
-  checkpoint_path: experiments/MNIST-Generate-VQVAE/trial-1/checkpoints/epoch-120.pth
+  checkpoint_path: experiments/MNIST-Generate-VQVAE/train-1/checkpoints/epoch-100.pth
 
 #* dataset config
 dataset:
@@ -66,25 +64,35 @@ train:
   num_epochs: 100
   batch_size: 1024
   optimizer: Adam
-  learning_rate: 0.001
+  learning_rate: 0.005
   use_ema: false
   need_other_modes:
     - eval
   need_datasets:
     - train
   
+  loss:
+    names: 
+      - Class
+      - Predict
+    weights: 
+      - 1.0
+      - 1.0
+  metric_names:
+
   log_interval: 1 # step
   eval_interval: 10 # epoch
   save_interval: 10 # epoch
 
 #* evaluating config
 eval:
-  batch_size: 20
+  batch_size: 32
   # need_other_modes:
   #   - null
   need_datasets:
     - eval
-  num_sample: 10
+  metric_names: 
+
 
 #* sampling config
 sample:

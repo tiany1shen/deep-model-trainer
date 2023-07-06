@@ -34,8 +34,8 @@ class GPT(nn.Module):
         cls_emb = self.cls_embedding(label)
         sen_emb = self.word_embedding(sen)
         
-        emb = torch.cat([cls_emb, sen_emb], dim=1)
-        pe = self.position_embedding(torch.arange(self.sen_len+1, device=emb.device)).unsqueeze(0)
+        emb = torch.cat([cls_emb.unsqueeze(1), sen_emb], dim=1)
+        pe = self.position_embedding.weight.unsqueeze(0)
         h = emb + pe
         
         mask = generate_mask(h)
@@ -78,7 +78,7 @@ class SperateOutput(nn.Module):
     
     def forward(self, x):
         x = self.mlp(x)
-        return self.cls_out(x[:, :1, :]), self.word_out(x[:, 1:, :])
+        return self.cls_out(x[:, -1, :]), self.word_out(x[:, :-1, :])
 
 def generate_mask(tensor):
     size = tensor.shape[1]

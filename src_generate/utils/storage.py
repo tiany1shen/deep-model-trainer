@@ -134,6 +134,8 @@ class MetricTracker:
         
         """
         names = to_list(names)
+        if len(names) < 1:
+            return {}
         reductions = to_list(reductions)
         if len(reductions) == 1:
             different_reduction = False

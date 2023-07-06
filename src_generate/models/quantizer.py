@@ -81,12 +81,10 @@ class VectorQuantizer_EMA_Reset(nn.Module):
             2 * torch.matmul(x, self.codebook.t())
         )
         _, code_idx = torch.min(distance, dim=-1)
-        return F.one_hot(code_idx, self.num_cb).float()
-    
-    def dequantize(self, onehot_code):
-        # onehot_code: [N, num_cb]
-        # Return: correspond codewords [N, D]
-        return torch.matmul(onehot_code.float(), self.codebook)
+        
+        onehot_code = F.one_hot(code_idx, self.num_cb).float()
+        x_quantized = torch.matmul(onehot_code, self.codebook)
+        return x_quantized, onehot_code
     
     @torch.no_grad()
     def _compute_perplexity(self, onehot_code):
@@ -139,8 +137,7 @@ class VectorQuantizer_EMA_Reset(nn.Module):
         if self.training and self.codebook.norm() == 0:
             self._reset_codebook(flat_x)
         
-        onehot_code = self.quantize(flat_x)
-        x_quantized = self.dequantize(onehot_code)
+        x_quantized, onehot_code = self.quantize(flat_x)
         
         if not self.training:
             return x_quantized, onehot_code, None, self._compute_perplexity(onehot_code)
