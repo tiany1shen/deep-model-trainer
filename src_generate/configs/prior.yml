@@ -89,14 +89,16 @@ eval:
   batch_size: 2
   # need_other_modes:
   #   - null
+  size: 10
   need_datasets:
     - eval
   metric_names: 
-
+ 
 
 #* sampling config
 sample:
   size: 10
+
 
 #* other flexible config
 # ema:

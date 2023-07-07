@@ -59,10 +59,10 @@ class GptTrainer(Trainer):
             time.sleep(1)
     
     @torch.no_grad()
-    def sample(self):
+    def eval(self):
         self.model.eval()
         labels = torch.arange(10).long().cuda()
-        labels = repeat(labels, 'b -> (b n)', n=self.config.sample.size)
+        labels = repeat(labels, 'b -> (b n)', n=self.config.eval.size)
         indices = torch.zeros(labels.shape[0], 49).long().cuda()
         for i in range(49):
             # greedy search
@@ -73,7 +73,7 @@ class GptTrainer(Trainer):
         
         imgs = self.encoder.decode(indices)
         imgs = self.eval_dataloader.dataset.inv_transforms()(imgs)
-        grid = rearrange(imgs, '(b n) c h w -> () c (n h) (b w)', n=self.config.sample.size)
+        grid = rearrange(imgs, '(b n) c h w -> () c (n h) (b w)', n=self.config.eval.size)
         
         import time
         

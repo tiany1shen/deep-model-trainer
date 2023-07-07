@@ -5,6 +5,7 @@
 TODOS:
 
 - [ ] Convert post-training logs, evaluations, and other functions into hook functions for unified management
+- [ ] Disgard the `sample` mode in `Trainer` class and use `eval` mode and hooks to sample
 - [ ] Rewrite README.md
 
 [English](/README.md) | [简体中文](/readme/README_zh_CN.md)
