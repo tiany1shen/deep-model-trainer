@@ -19,7 +19,7 @@ model:
       - 64
       - 128
 
-  checkpoint_path: "_"
+  checkpoint_path: " "
 
 #* dataset config
 dataset:
@@ -47,6 +47,12 @@ train:
     - eval
   need_datasets:
     - train
+  loss:
+    names: 
+      - CrossEntropy
+    weights: 
+      - 1.0
+  metric_names:
   
   log_interval: 1 # step
   eval_interval: 1 # epoch
@@ -59,6 +65,8 @@ eval:
   #   - null
   need_datasets:
     - eval
+  metric_names:
+    - Accuracy
 
 #* sampling config
 sample:

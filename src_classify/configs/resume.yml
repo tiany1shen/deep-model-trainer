@@ -1,7 +1,7 @@
-trial_index: 4
+trial_index: 1
 
 model:
-  checkpoint_path: "experiments/MNIST-Classification/trial-1/checkpoints/epoch-10.pth"
+  checkpoint_path: "experiments/MNIST-Classification/train-1/checkpoints/epoch-10.pth"
 
 train:
   learning_rate: 0.001

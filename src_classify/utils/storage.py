@@ -134,13 +134,16 @@ class MetricTracker:
         
         """
         names = to_list(names)
+        if len(names) < 1:
+            return {}
         reductions = to_list(reductions)
         if len(reductions) == 1:
             different_reduction = False
+            reductions = reductions * len(names)
             reduce_values = Reduction.get(reductions[0])
         else:
             different_reduction = True
-            assert len(reductions) >= len(names), "Number of reductions must be no less than number of names"
+        assert len(reductions) >= len(names), "Number of reductions must be no less than number of names"
             
         metrics = {}
         for name, reduction in zip(names, reductions):

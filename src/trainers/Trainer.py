@@ -21,126 +21,7 @@ class Trainer:
         self.debug = self.config.debug_epoch or self.config.debug_iter
         torch.backends.cudnn.benchmark = True
         self._build()
-        
-    def train(self):
-        assert self.config.mode == 'train', f"Trainer should be in train mode, got {self.config.mode} mode."
-        train_config = self.config.train
-        self.model.train()
-        
-        self.tracker.register('total_loss')
-        
-        total_step = (self.start_epoch - 1) * int(len(self.train_dataloader) // self.config.gradient_accumulation_steps)
-        # Training Loop
-        for epoch in range(self.start_epoch, self.start_epoch + train_config.num_epochs):
-            for batch_idx, batch in enumerate(self.train_dataloader):
-                self.model.train()
-                
-                self.print_progress(epoch, batch_idx, len(self.train_dataloader))
-                with self.accelerator.accumulate(self.model):
-                    inputs, targets = batch
-                    loss_dict, weight_dict = self._compute_loss(inputs, targets)
-                    
-                    self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
-                    total_loss = sum(loss_dict[name] * weight_dict[name] for name in loss_dict.keys())
-                    self.tracker.update({'total_loss': total_loss.detach().float()})
-                    
-                    self.accelerator.backward(total_loss)
-                    
-                    self.optimizer.step()
-                    # self.scheduler.step()
-                    self.optimizer.zero_grad()
-                
-                if (batch_idx + 1) % self.config.gradient_accumulation_steps == 0:
-                    total_step += 1
-                    # if self.ema is not None:
-                    #     self.ema.update(self.model)
-                    if total_step % train_config.log_interval == 0:
-                        self._log_loss(total_step)
-                    
-                    if self.config.debug_iter:
-                        self.accelerator.print('Debug mode, only run 1 step.')
-                        return
-                    
-            if 'eval' in train_config.need_other_modes:
-                if epoch % train_config.eval_interval == 0:
-                    self._eval_epoch(epoch)
-                    self._log_metrics(epoch)
-            
-            if 'sample' in train_config.need_other_modes:
-                if epoch % train_config.sample_interval == 0:
-                    self._sample_epoch(epoch)
-                
-            if epoch % train_config.save_interval == 0:
-                self._save_checkpoint(epoch)
-    
-            if self.config.debug_epoch:
-                self.accelerator.print('Debug mode, only run 1 epoch.')
-                return
-    
-    def _compute_loss(self, inputs, targets):
-        """
-        Compute loss for a batch of data.
-        
-        DDP model wrapped by Accelerator will not inherit costumized methods. Use `self.unwrap_model` to access these methods.
-        
-        Returns:
-          loss_dict: dict of losses
-          weight_dict: dict of weights for each loss
-        
-        Example:
-            >>> outputs = self.model(inputs)
-            >>> loss = self.unwrap_model.compute_loss(outputs, targets)
-            >>> return loss
-        """
-        raise NotImplementedError
-    
-    
-    def _register_custom_metrics(self):
-        self.loss_names = []
-        self.metric_names = []
-        self.tracker.register(self.loss_names + self.metric_names)
-        raise NotImplementedError
-    
-    def _log_metrics(self, epoch):
-        if self.debug:
-            return
-        metrics = self.tracker.fetch(self.metric_names, reductions='last')
-        self.tracker.register(self.metric_names)
-        self.accelerator.log(metrics, step=epoch)
-    
-    def _log_loss(self, step):
-        if self.debug:
-            return
-        loss_names = self.loss_names + ['total_loss']
-        losses = self.tracker.fetch(loss_names, reductions='mean')
-        self.tracker.register(loss_names)
-        self.accelerator.log(losses, step=step)
-            
-    @torch.no_grad()
-    def eval(self):
-        raise NotImplementedError
-        
-    @torch.no_grad()
-    def _eval_epoch(self, epoch):
-        raise NotImplementedError
-    
-    @torch.no_grad() 
-    def sample(self):
-        raise NotImplementedError
-        
-    @torch.no_grad()
-    def _sample_epoch(self, epoch):
-        raise NotImplementedError
-        
-    def _save_checkpoint(self, epoch):
-        self.accelerator.wait_for_everyone()
-        self.model.eval()
-        if self.accelerator.is_main_process:
-            checkpoint = {"epoch": epoch}
-            checkpoint["model"] = self.unwrap_model.state_dict()
-            checkpoint_path = Path(self.checkpoint_dir, f"epoch-{epoch}.pth")
-            torch.save(checkpoint, checkpoint_path)
-        
+         
     def _build(self):
         self._dir_setting()
         self._ddp_setting()
@@ -153,7 +34,7 @@ class Trainer:
         cpu = self.config.use_cpu
         gradient_accumulation_steps = self.config.gradient_accumulation_steps
         if self.config.log_metrics:
-            log_with = 'all'
+            log_with = 'tensorboard'
             project_dir = self.log_dir
         else:
             log_with = None
@@ -193,14 +74,6 @@ class Trainer:
             self.ddp_wrapped = True
         else:
             self.ddp_wrapped = False
-    
-    # def _init_ema(self):
-    #     ema_config = self.config.ema
-    #     self.ema = EMA(self.model, ema_config.decay)
-    #     if hasattr(ema_config, 'checkpoint_path') and Path(ema_config.checkpoint_path).exists():
-    #         self.ema.load_state_dict(torch.load(ema_config.checkpoint_path, map_location=self.device))
-    #     else:
-    #         self.ema.register()
         
     def _build_dataloaders(self):
         if hasattr(self.config.dataset, 'train'):
@@ -257,7 +130,7 @@ class Trainer:
             self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         if hasattr(self, 'sample_dir'):
             self.sample_dir.mkdir(parents=True, exist_ok=True)
-            
+       
     def _build_trackers(self):
         # build accelerator logger
         if not self.debug:
@@ -268,7 +141,158 @@ class Trainer:
         # build metric trackers
         self.tracker = MetricTracker() if self.accelerator.num_processes == 1 else SyncMetricTracker()
         self._register_custom_metrics()
+        
+    def train(self):
+        assert self.config.mode == 'train', f"Trainer should be in train mode, got {self.config.mode} mode."
+        train_config = self.config.train
+        self.model.train()
+        
+        self.tracker.register('Total_Loss')
+        
+        total_step = (self.start_epoch - 1) * int(len(self.train_dataloader) // self.config.gradient_accumulation_steps)
+        # Training Loop
+        for epoch in range(self.start_epoch, self.start_epoch + train_config.num_epochs):
+            for batch_idx, batch in enumerate(self.train_dataloader):
+                self.model.train()
+                
+                self.print_progress(epoch, self.start_epoch + train_config.num_epochs-1, batch_idx, len(self.train_dataloader))
+                with self.accelerator.accumulate(self.model):
+                    inputs, targets = batch
+                    loss_dict, weight_dict = self._compute_loss(inputs, targets)
+                    
+                    self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
+                    # print(loss_dict, weight_dict)
+                    # exit()
+                    total_loss = sum(loss_dict[name] * weight_dict[name] for name in self.loss_names)
+                    self.tracker.update({'Total_Loss': total_loss.detach().float()})
+                    
+                    self.accelerator.backward(total_loss)
+                    
+                    self.optimizer.step()
+                    # self.scheduler.step()
+                    self.optimizer.zero_grad()
+                
+                iter_completed = (batch_idx + 1) % self.config.gradient_accumulation_steps == 0
+                if iter_completed:
+                    total_step += 1
+                    # if self.ema is not None:
+                    #     self.ema.update(self.model)
+                    self._log_after_step(total_step)
 
+                    if self.config.debug_iter:
+                        self.accelerator.print('Debug mode, only run 1 step.')
+                        return
+            
+            if 'eval' in train_config.need_other_modes:
+                if epoch % train_config.eval_interval == 0:
+                    self._eval_epoch(epoch)
+                self._log_after_epoch(epoch)
+            
+            if 'sample' in train_config.need_other_modes:
+                if epoch % train_config.sample_interval == 0:
+                    self._sample_epoch(epoch)
+                
+            if epoch % train_config.save_interval == 0:
+                self._save_checkpoint(epoch)
+
+            if self.config.debug_epoch:
+                self.accelerator.print('Debug mode, only run 1 epoch.')
+                return
+    
+    def _compute_loss(self, inputs, targets):
+        """
+        Compute loss for a batch of data.
+        
+        DDP model wrapped by Accelerator will not inherit costumized methods. Use `self.unwrap_model` to access these methods.
+        
+        Returns:
+          loss_dict: dict of losses
+          weight_dict: dict of weights for each loss
+        """
+        raise NotImplementedError
+    
+    
+    def _register_custom_metrics(self):
+        self.loss_names = [] 
+        self.metric_step_names = []
+        self.metric_epoch_names = []
+        self.accelerator.print(f" Tracking Scalars during {self.config.mode}:")
+        if hasattr(self.config, "train"):
+            if self.config.train.loss.names is not None:
+                self.loss_names += [name + "_Loss" for name in self.config.train.loss.names]
+                self.loss_weights = self.config.train.loss.weights
+            if self.config.train.metric_names is not None:
+                self.metric_step_names += [name + "_Metric" for name in self.config.train.metric_names]
+            self.accelerator.print(f"\tper ITER:  {self.loss_names + ['Total_Loss'] + self.metric_step_names}")              
+        if hasattr(self.config, "eval"):
+            if self.config.eval.metric_names is not None:
+                self.metric_epoch_names += [name + "_Metric" for name in self.config.eval.metric_names]
+            self.accelerator.print(f"\tper EPOCH: {self.metric_epoch_names}")
+        self.tracker.register(self.loss_names + self.metric_step_names + self.metric_epoch_names)
+    
+    def _log_scalars(self, names, epoch, reduction="last"):
+        if self.debug:
+            return
+        metrics = self.tracker.fetch(names, reductions=reduction)
+        self.tracker.register(names)
+        self.accelerator.log(metrics, step=epoch)
+        
+    # def _log_images(self, dic, epoch):
+    #     if self.debug:
+    #         return
+    #     raise NotImplementedError
+    
+    # def _log_histograms(self, dic, epoch):
+    #     if self.debug:
+    #         return
+    #     raise NotImplementedError
+    
+    # def _log_img_hist(self, **kwargs):
+    #     if self.debug:
+    #         return
+    #     if "step" in kwargs:
+    #         step = kwargs["step"]
+    #     else:
+    #         step = kwargs["epoch"]
+    #     try:
+    #         imgs = kwargs["images"]
+    #         self._log_images(imgs, step)
+    #     except KeyError or NotImplementedError:
+    #         pass
+    #     try:
+    #         dist = kwargs["dist"]
+    #         self._log_histogram(dist, step)
+    #     except KeyError or NotImplementedError:
+    #         pass
+        
+    def _log_after_step(self, step):
+        if step % self.config.train.log_interval == 0:
+            self._log_scalars(self.loss_names + ['Total_Loss'], step, reduction="mean")
+            self._log_scalars(self.metric_step_names, step, reduction="last")
+            # self._log_img_hist(step=step, **kwargs)
+        
+    def _log_after_epoch(self, epoch):
+        if epoch % self.config.train.eval_interval == 0:
+            self._log_scalars(self.metric_epoch_names, epoch, reduction="last")
+        # self._log_img_hist(step=epoch, **kwargs)
+    
+    @torch.no_grad()
+    def _eval_epoch(self, epoch):
+        raise NotImplementedError
+    
+    @torch.no_grad()
+    def _sample_epoch(self, epoch):
+        raise NotImplementedError
+        
+    def _save_checkpoint(self, epoch):
+        self.accelerator.wait_for_everyone()
+        self.model.eval()
+        if self.accelerator.is_main_process:
+            checkpoint = {"epoch": epoch}
+            checkpoint["model"] = self.unwrap_model.state_dict()
+            checkpoint_path = Path(self.checkpoint_dir, f"epoch-{epoch}.pth")
+            torch.save(checkpoint, checkpoint_path)
+    
     @property
     def unwrap_model(self):
         if self.ddp_wrapped:
@@ -276,9 +300,36 @@ class Trainer:
         else:
             return self.model
         
-    def print_progress(self, epoch, batch_idx, epoch_len, length=10):
+    def print_progress(self, epoch, num_epoch, batch_idx, epoch_len, length=10):
         if self.debug:
             return
-        progress_bar = print_progress(epoch, self.start_epoch + self.config.train.num_epochs - 1, batch_idx+1, epoch_len, length=length)
-        end_char = "\n" if epoch == self.start_epoch + self.config.train.num_epochs - 1 and batch_idx == epoch_len - 1 else "\r"
+        progress_bar = print_progress(epoch, num_epoch, batch_idx+1, epoch_len, length=length)
+        end_char = "\n" if epoch == num_epoch and batch_idx == epoch_len - 1 else "\r"
         self.accelerator.print(progress_bar, end=end_char)
+        
+    @property
+    def after_step_hooks(self):
+        return [
+            lambda self: self._log_after_step(),
+            
+        ]
+    
+    @property
+    def after_epoch_hooks(self):
+        return [
+            lambda self: self._log_after_epoch(),
+        ]
+        
+    def _apply_hooks(self, hooks):
+        for hook in hooks:
+            hook(self)
+            
+            
+    @torch.no_grad()
+    def eval(self):
+        raise NotImplementedError
+        
+    @torch.no_grad() 
+    def sample(self):
+        raise NotImplementedError
+        

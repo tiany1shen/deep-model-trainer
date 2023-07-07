@@ -278,10 +278,12 @@ class Trainer:
     
     @torch.no_grad()
     def _eval_epoch(self, epoch):
+        return
         raise NotImplementedError
     
     @torch.no_grad()
     def _sample_epoch(self, epoch):
+        return
         raise NotImplementedError
         
     def _save_checkpoint(self, epoch):

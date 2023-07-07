@@ -4,7 +4,7 @@ trial_index: 1
 trainer_name: GptTrainer
 
 use_cpu: false
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 1
 split_batches: true
 log_metrics: true
 
@@ -15,7 +15,7 @@ model:
     num_class: 10
     num_vocab: 128
     sen_len: 49
-    num_layer: 6
+    num_layer: 8
     num_head: 4
     dim: 256
 
@@ -61,7 +61,7 @@ dataset:
 
 #* training config
 train:
-  num_epochs: 200
+  num_epochs: 100
   batch_size: 1024
   optimizer: Adam
   learning_rate: 0.001

@@ -1,6 +1,6 @@
 #* fill experiment info
-experiment_name: 
-trial_index: 
+experiment_name: MNIST-Generate
+trial_index: 1
 trainer_name: Trainer
 
 use_cpu: false
@@ -13,7 +13,7 @@ model:
   name: # model class name
   params:
 
-  checkpoint_path: " "
+  checkpoint_path: " " # model checkpoint path need to be str type
 
 #* dataset config
 dataset:
@@ -36,7 +36,13 @@ train:
     - eval
   need_datasets:
     - train
-  
+  loss:
+    names: 
+      - CrossEntropy
+    weights: 
+      - 1.0
+  metric_names:
+    - Acccuracy
   log_interval: 1 # step
   eval_interval: 1 # epoch
   save_interval: 1 # epoch
@@ -48,6 +54,7 @@ eval:
   #   - null
   need_datasets:
     - eval
+  metric_names:
 
 #* sampling config
 sample:

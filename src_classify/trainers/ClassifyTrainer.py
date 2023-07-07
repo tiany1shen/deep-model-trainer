@@ -9,19 +9,10 @@ class ClassifyTrainer(Trainer):
     def _compute_loss(self, inputs, targets):
         outputs = self.model(inputs)
         loss = self.unwrap_model.compute_loss(outputs, targets)
-        return {"loss": loss}, {"loss": 1.0}
-    
-    def _register_custom_metrics(self):
-        self.tracker.register(
-            ["loss", "accuracy"]
-        )
+        return {"CrossEntropy_Loss": loss}, dict(zip(self.loss_names, self.loss_weights))
         
-    def _log_metrics(self, epoch):
-        losses = self.tracker.fetch("accuracy", reductions='last')
-        self.accelerator.log(losses, step=epoch)
-    
     @torch.no_grad()
-    def eval(self):
+    def _eval_epoch(self, epoch):
         self.model.eval()
         correct = 0
         total = 0
@@ -33,9 +24,4 @@ class ClassifyTrainer(Trainer):
         correct = self.accelerator.reduce(correct, 'sum').item()
         total = self.accelerator.reduce(total, 'sum').item()
         accuracy = correct / total
-        self.accelerator.print(f"Accuracy {accuracy:.2%}")
-        self.tracker.update("accuracy", torch.Tensor([accuracy]))
-        
-    @torch.no_grad()
-    def _eval_epoch(self, epoch):
-        self.eval()
+        self.tracker.update("Accuracy_Metric", torch.Tensor([accuracy]))

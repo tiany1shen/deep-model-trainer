@@ -1,5 +1,12 @@
 # DeepModelTrainer
 
+## NOTICE: Development ongoing!
+
+TODOS:
+
+- [ ] Convert post-training logs, evaluations, and other functions into hook functions for unified management
+- [ ] Rewrite README.md
+
 [English](/README.md) | [简体中文](/readme/README_zh_CN.md)
 
 DMT is a framework for training deep learning models. It is designed to be modular and extensible, allowing for easy experimentation with different models, datasets, and training methods. DMT consists of four main components:
@@ -8,10 +15,6 @@ DMT is a framework for training deep learning models. It is designed to be modul
 - datasets: a sub package provides dataset interfaces
 - models:   a sub package provides model interfaces
 - trainers: a sub package provides container object to manage training and evaluating processes
-
-## TODO
-
-- [ ] fill the blank in [config format](/readme/configs.md/#configuration-file-format)
 
 ## Dependencies
 
