@@ -2,6 +2,16 @@
 
 ## NOTICE: Development ongoing!
 
+Update Ongoing:
+
+- [ ] 编写 BaseModel 类，继承 nn.Module 并实现一些通用功能，包括：
+  - [ ] 初始化参数
+  - [ ] 统计参数量
+  - [ ] 打印数据流
+- [ ] 规范 model 的三级结构：基础模块、单一网络、整体模型
+  - [ ] 所有模块和模型都应该继承 BaseModel 类
+  - [ ] 单一网络在组成整体网络时，需要经过封装，使其可以通过 args 实例化
+
 TODOS:
 
 - [ ] Convert post-training logs, evaluations, and other functions into hook functions for unified management
