@@ -78,36 +78,20 @@ def read_config_file(config_path: Path):
         config = yaml.safe_load(f)
     return config
 
-
-def useful_mode(mode: str, config: dict, mode_set: set = set()):
-    """ 
-    extract useful mode from config file. Those modes in `need_other_modes` argument will not be deleted.
-    """
-    mode_set.add(mode)
-    if 'need_other_modes' in config[mode]:
-        for other_mode in config[mode]['need_other_modes']:
-            mode_set = useful_mode(other_mode, config, mode_set)
-    return mode_set
-
-def useful_dataset(modes: set, config: dict):
-    """ 
-    extract useful dataset from config file. Those datasets in `need_other_datasets` argument will not be deleted.
-    """
-    dataset_set = set()
-    for mode in modes:
-        if 'need_datasets' in config[mode]:
-            for dataset in config[mode]['need_datasets']:
-                dataset_set.add(dataset)
-    return dataset_set
-
 def config_filter(config: dict, mode: str):
-    need_modes = useful_mode(mode, config)
-    redundant_modes = set('train eval sample'.split()) - need_modes
-    for del_mode in redundant_modes:
-        del config[del_mode]
-    redundant_datasets = set('train eval'.split()) - useful_dataset(need_modes, config)
     
-    for del_dataset in redundant_datasets:
+    nece_modes = set([mode])
+    if mode == "train" and config[mode]["need_eval"]:
+        nece_modes.add("eval")
+        
+    nece_datasets = set()
+    for mode in nece_modes:
+        if config[mode]["need_dataset"]:
+            nece_datasets.add(mode)
+            
+    for del_mode in set(['train', 'eval']) - nece_modes:
+        del config[del_mode]
+    for del_dataset in set(['train', 'eval']) - nece_datasets:
         del config['dataset'][del_dataset]
     
     return config
@@ -117,35 +101,45 @@ def get_config() -> EasyDict:
     Process command line arguments and config files. Delete those redundant key-value pairs.
     """
     args = parse_args()
+    return get_config_(
+        config=args.config,
+        new_config=args.new_config,
+        train=args.train,
+        eval=args.eval,
+        sample=args.sample,
+        print=args.print,
+        debug_epoch=args.debug_epoch,
+        debug_iter=args.debug_iter
+    )
     
-    config_path = config_name2path(args.config)
+def get_config_(config, new_config="", train=True, eval=False, sample=False, print=False, debug_epoch=False, debug_iter=False):
+    # 读取基础配置文件
+    config_path = config_name2path(config)
     config = read_config_file(config_path)
-    
-    if args.new_config != '':
-        new_config_path = config_name2path(args.new_config)
+    # 读取更新的配置文件
+    if new_config != '':
+        new_config_path = config_name2path(new_config)
         new_config = read_config_file(new_config_path)
         config = update_config(config, new_config)
-    
-    if args.train:
+    # 确定模式
+    if train:
         config['mode'] = 'train'
-    elif args.eval:
+    elif eval:
         config['mode'] = 'eval'
-    elif args.sample:
-        config['mode'] = 'sample'
     else:
         raise ValueError('invalid mode')
-    
+    # 删去无用的key-value
     config = config_filter(config, config['mode'])
     
     assert 'experiment_name' in config and config['experiment_name'] is not None, 'experiment_name is empty'
     assert 'trial_index' in config and config['trial_index'] is not None, 'trial_index is empty'
     
-    if args.print:
+    if print:
         pprint(config)
         exit()
             
-    config['debug_epoch'] = args.debug_epoch
-    config['debug_iter'] = args.debug_iter
+    config['debug_epoch'] = debug_epoch
+    config['debug_iter'] = debug_iter
     return EasyDict(config)
 
 def edict2dict(edict: EasyDict):

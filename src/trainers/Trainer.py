@@ -157,8 +157,7 @@ class Trainer:
                 
                 self.print_progress(epoch, self.start_epoch + train_config.num_epochs-1, batch_idx, len(self.train_dataloader))
                 with self.accelerator.accumulate(self.model):
-                    inputs, targets = batch
-                    loss_dict, weight_dict = self._compute_loss(inputs, targets)
+                    loss_dict, weight_dict = self._compute_loss(batch)
                     
                     self.tracker.update({name: loss.detach().float() for name, loss in loss_dict.items()})
                     # print(loss_dict, weight_dict)
@@ -183,14 +182,10 @@ class Trainer:
                         self.accelerator.print('Debug mode, only run 1 step.')
                         return
             
-            if 'eval' in train_config.need_other_modes:
+            if train_config.need_eval:
                 if epoch % train_config.eval_interval == 0:
                     self._eval_epoch(epoch)
                 self._log_after_epoch(epoch)
-            
-            if 'sample' in train_config.need_other_modes:
-                if epoch % train_config.sample_interval == 0:
-                    self._sample_epoch(epoch)
                 
             if epoch % train_config.save_interval == 0:
                 self._save_checkpoint(epoch)
@@ -198,19 +193,6 @@ class Trainer:
             if self.config.debug_epoch:
                 self.accelerator.print('Debug mode, only run 1 epoch.')
                 return
-    
-    def _compute_loss(self, inputs, targets):
-        """
-        Compute loss for a batch of data.
-        
-        DDP model wrapped by Accelerator will not inherit costumized methods. Use `self.unwrap_model` to access these methods.
-        
-        Returns:
-          loss_dict: dict of losses
-          weight_dict: dict of weights for each loss
-        """
-        raise NotImplementedError
-    
     
     def _register_custom_metrics(self):
         self.loss_names = [] 
@@ -237,34 +219,6 @@ class Trainer:
         self.tracker.register(names)
         self.accelerator.log(metrics, step=epoch)
         
-    # def _log_images(self, dic, epoch):
-    #     if self.debug:
-    #         return
-    #     raise NotImplementedError
-    
-    # def _log_histograms(self, dic, epoch):
-    #     if self.debug:
-    #         return
-    #     raise NotImplementedError
-    
-    # def _log_img_hist(self, **kwargs):
-    #     if self.debug:
-    #         return
-    #     if "step" in kwargs:
-    #         step = kwargs["step"]
-    #     else:
-    #         step = kwargs["epoch"]
-    #     try:
-    #         imgs = kwargs["images"]
-    #         self._log_images(imgs, step)
-    #     except KeyError or NotImplementedError:
-    #         pass
-    #     try:
-    #         dist = kwargs["dist"]
-    #         self._log_histogram(dist, step)
-    #     except KeyError or NotImplementedError:
-    #         pass
-        
     def _log_after_step(self, step):
         if step % self.config.train.log_interval == 0:
             self._log_scalars(self.loss_names + ['Total_Loss'], step, reduction="mean")
@@ -276,6 +230,18 @@ class Trainer:
             self._log_scalars(self.metric_epoch_names, epoch, reduction="last")
         # self._log_img_hist(step=epoch, **kwargs)
     
+    def _compute_loss(self, batch):
+        """
+        Compute loss for a batch of data.
+        
+        DDP model wrapped by Accelerator will not inherit costumized methods. Use `self.unwrap_model` to access these methods.
+        
+        Returns:
+          loss_dict: dict of losses
+          weight_dict: dict of weights for each loss
+        """
+        raise NotImplementedError
+    
     @torch.no_grad()
     def _eval_epoch(self, epoch):
         raise NotImplementedError
@@ -283,8 +249,20 @@ class Trainer:
     @torch.no_grad()
     def _sample_epoch(self, epoch):
         raise NotImplementedError
+    
+           
+    @torch.no_grad()
+    def eval(self):
+        raise NotImplementedError
+        
+    @torch.no_grad() 
+    def sample(self):
+        raise NotImplementedError
+        
         
     def _save_checkpoint(self, epoch):
+        if self.debug:
+            return
         self.accelerator.wait_for_everyone()
         self.model.eval()
         if self.accelerator.is_main_process:
@@ -324,12 +302,4 @@ class Trainer:
         for hook in hooks:
             hook(self)
             
-            
-    @torch.no_grad()
-    def eval(self):
-        raise NotImplementedError
-        
-    @torch.no_grad() 
-    def sample(self):
-        raise NotImplementedError
-        
+     
