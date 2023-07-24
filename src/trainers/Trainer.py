@@ -31,7 +31,7 @@ class Trainer:
         self._build_trackers()
         
     def _ddp_setting(self):
-        cpu = self.config.use_cpu
+        cpu = getattr(self.config, self.config.mode).use_cpu
         gradient_accumulation_steps = self.config.gradient_accumulation_steps
         if self.config.log_metrics:
             log_with = 'tensorboard'
@@ -59,11 +59,12 @@ class Trainer:
         self.accelerator.print("Model prepared successfully")
         
     def _init_ddp_model(self, model):
-        if self.config.model.checkpoint_path is not None and Path(self.config.model.checkpoint_path).exists():
-            checkpoint = torch.load(self.config.model.checkpoint_path, map_location=self.device)
+        self.checkpoint_path = getattr(self.config, self.config.mode).checkpoint_path
+        if self.checkpoint_path is not None and Path(self.checkpoint_path).exists():
+            checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
             model.load_state_dict(checkpoint['model'])
             self.start_epoch = checkpoint['epoch'] + 1
-            self.accelerator.print(f"Loaded model from {self.config.model.checkpoint_path}")
+            self.accelerator.print(f"Loaded model from {self.checkpoint_path}")
         else:
             if hasattr(model, 'init_weights'):
                 model.init_weights()
@@ -103,24 +104,29 @@ class Trainer:
               
     def _build_optimizer(self):
         if self.config.mode == 'train':
-            self.optimizer = self.accelerator.prepare(
-                getattr(Optimizer, self.config.train.optimizer)(
+            optimizer = getattr(Optimizer, self.config.train.optimizer)(
                     params=self.model.parameters(), lr=self.config.train.learning_rate
                 )
-            )
-            self.optimizer.zero_grad()
-         
+            if self.checkpoint_path is not None and Path(self.checkpoint_path).exists():
+                checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
+                optimizer.load_state_dict(checkpoint['optimizer'])
+                optimizer.param_groups[0]['capturable'] = True
+            else:
+                optimizer.zero_grad()
+            
+            self.optimizer = self.accelerator.prepare(optimizer)
+            
     def _dir_setting(self):
-        self.experiment_dir = Path('experiments')
+        self.experiment_dir = Path('OUTPUTS')
         self.experiment_name = self.config.experiment_name
         self.trial_index = self.config.trial_index
         
         self.log_dir = Path(self.experiment_dir, self.experiment_name, 'logs')
-        self.trial_dir = Path(self.experiment_dir, self.experiment_name, f"{self.config.mode}-{self.trial_index}")
+        
+        trial_name = f"{self.config.mode}-{self.config.model.name}-{self.trial_index}"
+        self.trial_dir = Path(self.experiment_dir, self.experiment_name, trial_name)
         if self.config.mode == 'train':
             self.checkpoint_dir = Path(self.trial_dir, 'checkpoints')
-        if hasattr(self.config, 'sample'):
-            self.sample_dir = Path(self.trial_dir, 'samples')
             
         if self.debug:
             return 
@@ -128,13 +134,11 @@ class Trainer:
         self.trial_dir.mkdir(parents=True, exist_ok=True)
         if hasattr(self, 'checkpoint_dir'):
             self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        if hasattr(self, 'sample_dir'):
-            self.sample_dir.mkdir(parents=True, exist_ok=True)
        
     def _build_trackers(self):
         # build accelerator logger
         if not self.debug:
-            run = f"{self.config.mode}-{self.config.trial_index}"
+            run = f"{self.config.mode}-{self.config.model.name}-{self.config.trial_index}"
             self.accelerator.init_trackers(run)
             save_config(self.config, self.trial_dir / 'config.yaml')
             
@@ -247,16 +251,7 @@ class Trainer:
         raise NotImplementedError
     
     @torch.no_grad()
-    def _sample_epoch(self, epoch):
-        raise NotImplementedError
-    
-           
-    @torch.no_grad()
     def eval(self):
-        raise NotImplementedError
-        
-    @torch.no_grad() 
-    def sample(self):
         raise NotImplementedError
         
         
@@ -268,6 +263,7 @@ class Trainer:
         if self.accelerator.is_main_process:
             checkpoint = {"epoch": epoch}
             checkpoint["model"] = self.unwrap_model.state_dict()
+            checkpoint["optimizer"] = self.optimizer.state_dict()
             checkpoint_path = Path(self.checkpoint_dir, f"epoch-{epoch}.pth")
             torch.save(checkpoint, checkpoint_path)
     

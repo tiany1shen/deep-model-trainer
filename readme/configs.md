@@ -58,6 +58,63 @@ Our YAML configuration files follow the following format:
 ```yaml
 # In config.yml
 
+# fill experiment info
+experiment_name: MNIST
+trial_index: 1
+trainer_name: Trainer
+
+gradient_accumulation_steps: 1
+split_batches: true
+log_metrics: true
+
+# model config
+model:
+  name: # model class name
+  params:
+
+# dataset config
+dataset:
+  train:
+    name: # dataset class name
+    params:
+    
+  eval:
+    name: # dataset class name
+    params:
+
+# training config
+train:
+  use_cpu: false
+  checkpoint_path:  # path to checkpoint file
+  num_epochs: 10
+  batch_size: 400
+  optimizer: Adam
+  learning_rate: 0.01
+  use_ema: false
+  loss:
+    names: 
+      - CrossEntropy
+      - MSE
+    weights: 
+      - 1.0
+      - 1.0
+  metric_names:
+    # - Acccuracy
+  need_dataset: true
+  need_eval: false
+  log_interval: 10 # step
+  eval_interval: 1 # epoch
+  save_interval: 20 # epoch
+  
+# evaluating config
+eval:
+  use_cpu: true
+  batch_size: 400
+  checkpoint_path: # path to checkpoint file
+  need_dataset: true
+  metric_names:
+    # - Acccuracy
+
 ```
 
 ## PyYAML

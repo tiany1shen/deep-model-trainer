@@ -1,9 +1,8 @@
 #* fill experiment info
-experiment_name: MNIST-Generate
+experiment_name: MNIST
 trial_index: 1
 trainer_name: Trainer
 
-use_cpu: false
 gradient_accumulation_steps: 1
 split_batches: true
 log_metrics: true
@@ -12,8 +11,6 @@ log_metrics: true
 model:
   name: # model class name
   params:
-
-  checkpoint_path: " " # model checkpoint path need to be str type
 
 #* dataset config
 dataset:
@@ -27,40 +24,35 @@ dataset:
 
 #* training config
 train:
+  use_cpu: false
+  checkpoint_path:  # model checkpoint path need to be str type
   num_epochs: 10
   batch_size: 400
   optimizer: Adam
   learning_rate: 0.01
   use_ema: false
-  need_other_modes:
-    - eval
-  need_datasets:
-    - train
   loss:
     names: 
-      - CrossEntropy
+      - Commitment
+      - Reconstruction
     weights: 
       - 1.0
+      - 1.0
   metric_names:
-    - Acccuracy
-  log_interval: 1 # step
+    # - Acccuracy
+  need_dataset: true
+  need_eval: false
+  log_interval: 10 # step
   eval_interval: 1 # epoch
-  save_interval: 1 # epoch
-
+  save_interval: 20 # epoch
+  
 #* evaluating config
 eval:
-  batch_size: 100
-  # need_other_modes:
-  #   - null
-  need_datasets:
-    - eval
+  use_cpu: true
+  batch_size: 400
+  checkpoint_path: "weights/vqvae_triangles_epoch_620.pth"
+  save_path: "resource/triangle_samples.png"
+  need_dataset: true
+  
   metric_names:
-
-#* sampling config
-sample:
-  size: 100
-
-#* other flexible config
-# ema:
-#   decay: 0.9999
-#   checkpoint_path: null
+  

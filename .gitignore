@@ -160,6 +160,7 @@ cython_debug/
 #.idea/
 
 /experiments
+/OUTPUTS
 /data
 data/
 *.code-workspace

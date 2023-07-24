@@ -72,7 +72,7 @@ def config_name2path(config_name: str):
 
 def read_config_file(config_path: Path):
     assert config_path.exists(), f'config file {config_path} not found'
-    assert config_path.suffix == '.yml', f'config file {config_path} is not a yaml file'
+    assert config_path.suffix in ['.yml', ".yaml"], f'config file {config_path} is not a yaml file'
     
     with open(config_path) as f:
         config = yaml.safe_load(f)
@@ -90,9 +90,11 @@ def config_filter(config: dict, mode: str):
             nece_datasets.add(mode)
             
     for del_mode in set(['train', 'eval']) - nece_modes:
-        del config[del_mode]
+        if del_mode in config:
+            del config[del_mode]
     for del_dataset in set(['train', 'eval']) - nece_datasets:
-        del config['dataset'][del_dataset]
+        if del_dataset in config['dataset']:
+            del config['dataset'][del_dataset]
     
     return config
 
