@@ -245,7 +245,9 @@ class Trainer:
           weight_dict: dict of weights for each loss
         """
         raise NotImplementedError
-    
+        loss_list = []
+        return dict(zip(self.loss_names, loss_list)), dict(zip(self.loss_names, self.loss_weights))
+
     @torch.no_grad()
     def _eval_epoch(self, epoch):
         raise NotImplementedError
