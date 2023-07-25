@@ -45,7 +45,7 @@ def update_config(config: dict, new_config: dict):
     """
     for key, value in new_config.items():
         assert key in config, f'key {key} not in config'
-        assert type(value) == type(config[key]), f'type of {key} is {type(config[key])}, not {type(value)}'
+        assert type(value) == type(config[key]) or config[key] is None, f'type of {key} is {type(config[key])}, not {type(value)}'
         
         if type(value) == type(config[key]) == dict:
             update_config(config[key], value)
